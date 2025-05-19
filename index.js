@@ -6,7 +6,12 @@ import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import readline from 'readline';
-import EventEmitter from 'events';
+
+import GameServer from './src/GameServer.js';
+import IOServer from './src/IOServer.js';
+import PSMove from './src/enums/PSMove.js';
+import Controller from './src/Controller.js';
+import Sync from './src/enums/Sync.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -23,6 +28,7 @@ async function startServer() {
   });
 
   const wss = new WebSocketServer({ server });
+  IOServer.init(wss);
 
   // Create Vite in middleware mode (for dev)
   const vite = await createViteServer({
@@ -36,58 +42,78 @@ async function startServer() {
     app.use(express.static(path.join(__dirname, 'dist')));
   }
 
-  // API route (example)
-  app.get('/api/data', (req, res) => {
-    res.json({ message: 'Hello from the backend!' });
-  });
-
   // WebSocket Connection (Real-Time Updates)
-  const clients = new Set();
-  const wsEmit = (data) => {
-    clients.forEach((client) => {
-      if (client.readyState === WebSocket.OPEN) {
-        client.send(JSON.stringify(data));
-      }
-    });
-  }
+  // const clients = new Set();
+  // const wsEmit = (data) => {
+  //   clients.forEach((client) => {
+  //     if (client.readyState === WebSocket.OPEN) {
+  //       client.send(JSON.stringify(data));
+  //     }
+  //   });
+  // }
 
-  wss.on('connection', (ws) => {
-    console.log('Client connected to WebSocket');
-    clients.add(ws);
+  // let clientId = 0;
+  // wss.on('connection', (ws, req) => {
+  //   ws.id = ++clientId;
+  //   console.log(`Client ${ws.id} connected`, req.socket.remoteAddress);
+  //   clients.add(ws);
 
-    // Send a message every 2 seconds
-    const interval = setInterval(() => {
-      ws.send(JSON.stringify({ time: new Date().toISOString(), msg: "Test?!" }));
-    }, 2000);
-
-    // Generic data sending
-    ws.on('send', (data) => {
-      ws.send(JSON.stringify(data));
-    })
-
-    ws.on('close', () => {
-      console.log('Client disconnected');
-      clients.delete(ws);
-      clearInterval(interval);
-    });
-  });
+  //   ws.on('close', () => {
+  //     console.log(`Client ${ws.id} disconnected`, req.socket.remoteAddress);
+  //     clients.delete(ws);
+  //   });
+  // });
 
   // Reading data from stdin
   const rl = readline.createInterface({
     input: process.stdin,
-    output: process.stdout,
-    terminal: false
+    // output: process.stdout,
+    // terminal: false
   });
+
+  /**
+  * @param {Controller} controller
+  */
+  const processButtons = (controller) => {
+    const player = controller.player;
+    if(!player) { return; }
+    const justPressed = (btn) => controller.buttons & controller.changed & btn;
+    const calibToggle = controller.changed & PSMove.Btn_START;
+    player.calibrationMode = calibToggle & controller.buttons;
+    // Process calibration inputs
+    const trigger = controller.buttons & PSMove.Btn_T;
+    if(player.calibrationMode) {
+      let scaleMod = justPressed(PSMove.Btn_SQUARE) ? 1 : justPressed(PSMove.Btn_CROSS) ? -1 : 0;
+      if(trigger) { scaleMod *= 5; }
+      controller.scale += scaleMod;
+      IOServer.addSync(Sync.CONTROLLER, controller.id, "scale");
+    }
+  }
   
+  // Process line of PSMOVE data
   rl.on('line', (line) => {
-    const [msg, x, y, z, buttons, trigger, rw, rx, ry, rz] = line.split(" ");
-    if(msg === "update") {
-      const calibrate = buttons & 524288;
-      //console.log(`Update received: rot=(${rw}, ${rx}, ${ry}, ${rz})`);
-      wsEmit({type: "update", x, y, z, rw, rx, ry, rz, calibrate})
+    // TODO: multiple controller data in one line, separated by ';'?
+    const data = line.split(" ");
+    const type = data[0];
+    if(type === "move_update") {
+      console.log(line);
+      // Convert data array to object with named properties
+      const msg = {};
+      ["type", "id", "x", "y", "z", "qw", "qx", "qy", "qz", "buttons", "trigger"]
+        .forEach((key, i) => msg[key] = (key === "type") ? data[i] : Number(data[i]));
+      // Update server-side controller
+      const controller = GameServer.getController(msg.id);
+      const changed = controller.buttons ^ msg.buttons;
+      controller.position.set(msg.x, msg.y, msg.z);
+      controller.quaternion.set(msg.qx, msg.qy, msg.xz, msg.qw);
+      controller.buttons = msg.buttons;
+      controller.changed = changed;
+      processButtons(controller);
+      // Emit info to clients
+      IOServer.emit(msg);
     }
     else {
-      console.log(`Received a different kind of message: ${msg}`);
+      console.log(`Received a different type of message: ${type}`, line);
     }
   });
   

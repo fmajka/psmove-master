@@ -9,7 +9,7 @@ export default defineConfig({
       cert: './ssl/cert.pem'
     },
     proxy: {
-      '/api': 'http://localhost:3000', // Proxy API requests to Express
+      '/api': 'https://localhost:3000', // Proxy API requests to Express
       '/ws': {
         target: 'ws://localhost:3000', // Proxy WebSocket connections
         ws: true
