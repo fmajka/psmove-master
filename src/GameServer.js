@@ -18,10 +18,11 @@ export default class GameServer {
 		return this.state.controllers.get(id);
 	}
 
-	static initPlayer(id) {
+	static getPlayer(id) {
 		if(!this.state.players.has(id)) {
 			this.state.players.set(id, new Player(id));
 		}
+		return this.state.players.get(id);
 	}
 
 	/**
@@ -33,5 +34,13 @@ export default class GameServer {
 		const player = this.state.players.get(id);
 		if(!player) { return; }
 		player.quaternionLocal = quaternion; 
+	}
+
+	// TODO: it's only temporary
+	static getFirstVRPlayer() {
+		for(const player of GameServer.state.players.values()) {
+			if(player.vr) { return player; }
+		}
+		return null;
 	}
 }

@@ -62,16 +62,24 @@ export default class Controller {
 	initModel() {
 		const stick = new THREE.Mesh(
 			new THREE.BoxGeometry(0.04, 0.04, 0.14),
-			new THREE.MeshBasicMaterial({ color: 0x0044ff })
+			new THREE.MeshBasicMaterial({ color: 0x222222 })
 		);
 		stick.position.z = 0.09;
+		const trigger = new THREE.Mesh(
+			new THREE.BoxGeometry(0.02, 0.02, 0.03),
+			new THREE.MeshBasicMaterial({ color: 0x444444 })
+		);
+		trigger.position.y = -0.02;
+		trigger.position.z = 0.05;
+		trigger.rotateX(Math.PI / 6);
 		const bulb = new THREE.Mesh(
 			new THREE.SphereGeometry(0.025),
-			new THREE.MeshBasicMaterial({ color: 0xff00ff })
+			new THREE.MeshBasicMaterial({ color: 0xff44ff })
 		);
 		// Pivot for rotation
 		this.localPivot = new THREE.Object3D();
 		this.localPivot.add(stick);
+		this.localPivot.add(trigger);
 		this.localPivot.add(bulb);
 		// Offset for translation
 		this.localOffset = new THREE.Object3D();
@@ -80,7 +88,7 @@ export default class Controller {
 
 	// Returns actual in-game position
 	updatePosition() {
-		this.position = this.physicalPos.clone().multiplyScalar(this.scale).add(this.localOffset);
+		this.position = this.physicalPos.clone().multiplyScalar(this.scale).add(this.offset);
 		return this.position;
 	}
 

@@ -24,7 +24,9 @@ export default class IOServer {
 
 			console.log(`Client ${clientId} connected`, addr);
 			IOServer.clients.add(ws);
-			GameServer.initPlayer(addr);
+			// Used for initialization...?
+			// TODO: do I even need to do this?
+			GameServer.getPlayer(addr);
 
 			ws.on('close', () => {
 				console.log(`Client ${clientId} disconnected`, addr);
@@ -35,8 +37,17 @@ export default class IOServer {
 				try {
 					const data = JSON.parse(msg.toString());
 					if(data.type === "sync_camera") {
-						console.log(addr, data.quaternion);
-						// GameServer.setPlayerRotation(addr, new THREE.Quaternion(...data.quaternion));
+						// console.log(addr, data.quaternion);
+						GameServer.setPlayerRotation(addr, new THREE.Quaternion(...data.quaternion));
+					}
+					else if(data.type === "enter_vr") {
+						const player = GameServer.getPlayer(addr);
+						// TODO: proper Player prop
+						player.vr = true;
+						const {x, y, z} = data.position;
+						player.position.set(x, y, z);
+						console.log(addr, "is now VR on position", player.position);
+						console.log("presenting", data.presenting);
 					}
 				} catch(err) {
 					console.log("IOServer onmessage error:", err.message);

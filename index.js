@@ -76,24 +76,27 @@ async function startServer() {
   * @param {Controller} controller
   */
   const processButtons = (controller) => {
-    const player = controller.player;
+    const player = GameServer.getFirstVRPlayer();
     if(!player) { return; }
     const justPressed = (btn) => controller.buttons & controller.changed & btn;
-    const calibToggle = controller.changed & PSMove.Btn_START;
-    player.calibrationMode = calibToggle & controller.buttons;
-    if(calibToggle) { IOServer.addSync(Sync.PLAYER, player.id, "calibrationMode"); }
+    const calibToggle = controller.changed & controller.buttons & PSMove.Btn_START;
+    if(calibToggle) {
+      player.calibrationMode = !player.calibrationMode;
+      IOServer.addSync(Sync.PLAYER, player.id, "calibrationMode");
+      console.log("calibMode changed to", player.calibrationMode);
+    }
     const trigger = controller.buttons & PSMove.Btn_T;
     // Process calibration inputs
     if(player.calibrationMode) {
       // Adjust position scaling
-      let scaleMod = justPressed(PSMove.Btn_SQUARE) ? 1 : justPressed(PSMove.Btn_CROSS) ? -1 : 0;
+      let scaleMod = justPressed(PSMove.Btn_SQUARE) ? 0.01 : justPressed(PSMove.Btn_CROSS) ? -0.01 : 0;
       if(trigger) { scaleMod *= 5; }
       controller.scale += scaleMod;
       IOServer.addSync(Sync.CONTROLLER, controller.id, "scale");
       // Adjust player position relatively to controller's position
       if(justPressed(PSMove.Btn_MOVE)) {
         // Offset between player's and controller's position (towards controller yaw)
-        const faceDistance = 10; 
+        const faceDistance = 0.12; 
         const yawFromQuat = (quat) => new THREE.Euler().setFromQuaternion(quat, "YXZ").y;
         // Get controller's yaw rotation
         const controllerYaw = yawFromQuat(controller.quaternion);
@@ -109,8 +112,11 @@ async function startServer() {
         IOServer.addSync(Sync.PLAYER, player.id, "yawOffset");
         // Add to controller offset to place the controller in front of the player's face
         const targetPos = player.position.clone().add(faceOffset);
-        controller.offset.set(targetPos.sub(controller.position));
+        // const targetPos = player.position.clone();
+        const movePos = controller.physicalPos.clone().multiplyScalar(controller.scale);
+        controller.offset.copy(targetPos.sub(movePos));
         controller.updatePosition();
+        console.log("Pos", controller.position, "Offset", controller.offset);
         IOServer.addSync(Sync.CONTROLLER, controller.id, "position");
       }
     }
@@ -135,7 +141,8 @@ async function startServer() {
       // Update server-side controller
       const controller = GameServer.getController(msg.id);
       const changed = controller.buttons ^ msg.buttons;
-      controller.position.set(msg.x / 100, msg.y / 100, msg.z / 100);
+      controller.physicalPos.set(msg.x / 100, msg.y / 100, msg.z / 100);
+      controller.updatePosition();
       controller.quaternion.set(msg.qx, msg.qy, msg.qz, msg.qw);
       controller.buttons = msg.buttons;
       controller.changed = changed;
