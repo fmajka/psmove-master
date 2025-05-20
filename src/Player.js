@@ -2,14 +2,14 @@ import * as THREE from 'three';
 
 export default class Player {
 	/**
-	 * 
 	 * @param {string} id Identifier of the player should be their websocket IP address
 	 */
-	constructor(id) {
+	constructor(id, camera) {
 		this.id = id;
+		// Player's server side position
 		this.position = new THREE.Vector3();
-		// TODO: wrap camera in a parent that will adjust yaw drift
-		this.cameraWrapper = null;
+		// Client camera object's raw quaternion
+		this.quaternionLocal = new THREE.Quaternion();
 		// Offset used for adjusting camera drift
 		this.yawOffset = 0.0;
 		// Controller assigned to the player
@@ -20,9 +20,10 @@ export default class Player {
 		 * @type {Boolean}
 		 */
 		this.calibrationMode = false;
-	}
 
-	getRotation() {
+		if(!camera) { return; }
 
+		this.cameraRig = new THREE.Group();
+		this.cameraRig.add(camera);
 	}
 }

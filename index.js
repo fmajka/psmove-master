@@ -6,6 +6,7 @@ import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import readline from 'readline';
+import * as THREE from 'three';
 
 import GameServer from './src/GameServer.js';
 import IOServer from './src/IOServer.js';
@@ -80,23 +81,53 @@ async function startServer() {
     const justPressed = (btn) => controller.buttons & controller.changed & btn;
     const calibToggle = controller.changed & PSMove.Btn_START;
     player.calibrationMode = calibToggle & controller.buttons;
-    // Process calibration inputs
+    if(calibToggle) { IOServer.addSync(Sync.PLAYER, player.id, "calibrationMode"); }
     const trigger = controller.buttons & PSMove.Btn_T;
+    // Process calibration inputs
     if(player.calibrationMode) {
+      // Adjust position scaling
       let scaleMod = justPressed(PSMove.Btn_SQUARE) ? 1 : justPressed(PSMove.Btn_CROSS) ? -1 : 0;
       if(trigger) { scaleMod *= 5; }
       controller.scale += scaleMod;
       IOServer.addSync(Sync.CONTROLLER, controller.id, "scale");
+      // Adjust player position relatively to controller's position
+      if(justPressed(PSMove.Btn_MOVE)) {
+        // Offset between player's and controller's position (towards controller yaw)
+        const faceDistance = 10; 
+        const yawFromQuat = (quat) => new THREE.Euler().setFromQuaternion(quat, "YXZ").y;
+        // Get controller's yaw rotation
+        const controllerYaw = yawFromQuat(controller.quaternion);
+        // Calculate offset vector in XZ plane
+        const faceOffset = new THREE.Vector3(
+          Math.sin(controllerYaw) * faceDistance,
+          0,
+          Math.cos(controllerYaw) * faceDistance
+        );
+        // Adjust camera yaw
+        const cameraYaw = yawFromQuat(player.quaternionLocal);
+        player.yawOffset = controllerYaw - cameraYaw;
+        IOServer.addSync(Sync.PLAYER, player.id, "yawOffset");
+        // Add to controller offset to place the controller in front of the player's face
+        const targetPos = player.position.clone().add(faceOffset);
+        controller.offset.set(targetPos.sub(controller.position));
+        controller.updatePosition();
+        IOServer.addSync(Sync.CONTROLLER, controller.id, "position");
+      }
     }
   }
   
   // Process line of PSMOVE data
+  let doPrint = true;
   rl.on('line', (line) => {
     // TODO: multiple controller data in one line, separated by ';'?
     const data = line.split(" ");
     const type = data[0];
     if(type === "move_update") {
-      console.log(line);
+      if(doPrint) {
+        doPrint = false;
+        console.log(line);
+        setTimeout(() => doPrint = true, 1000);
+      }
       // Convert data array to object with named properties
       const msg = {};
       ["type", "id", "x", "y", "z", "qw", "qx", "qy", "qz", "buttons", "trigger"]
@@ -104,13 +135,15 @@ async function startServer() {
       // Update server-side controller
       const controller = GameServer.getController(msg.id);
       const changed = controller.buttons ^ msg.buttons;
-      controller.position.set(msg.x, msg.y, msg.z);
-      controller.quaternion.set(msg.qx, msg.qy, msg.xz, msg.qw);
+      controller.position.set(msg.x / 100, msg.y / 100, msg.z / 100);
+      controller.quaternion.set(msg.qx, msg.qy, msg.qz, msg.qw);
       controller.buttons = msg.buttons;
       controller.changed = changed;
+      IOServer.addSync(Sync.CONTROLLER, controller.id, "position", "quaternion", "buttons", "changed");
       processButtons(controller);
       // Emit info to clients
-      IOServer.emit(msg);
+      IOServer.emitSync();
+      // IOServer.emit(msg);
     }
     else {
       console.log(`Received a different type of message: ${type}`, line);
