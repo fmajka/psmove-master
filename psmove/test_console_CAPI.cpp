@@ -31,7 +31,7 @@ enum PSMove_Button {
     Btn_T = 1 << 20, /*!< Trigger, on the back */
 };
 
-#define BTNBIT(button, bit) button ? bit : 0
+#define BTNBIT(button, bit) (button ? bit : 0)
 
 class PSMoveConsoleClient {
     public:

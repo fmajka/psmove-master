@@ -10,7 +10,7 @@ import Player from './Player.js';
 // Scene and camera init
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 1000);
-// camera.position.setZ(1);
+camera.position.setZ(1);
 // camera.position.z = 5;
 // camera.lookAt(0,0,0);
 
@@ -45,6 +45,10 @@ const ambientLight = new THREE.AmbientLight(0xffffff, 1.0);
 const sun = new THREE.PointLight(0xffffaa, 10, 0, 0);
 sun.position.set(100, 20, 0);
 scene.add(pointLight, ambientLight, sun);
+// Axes helper
+const axesHelper = new THREE.AxesHelper(5);
+axesHelper.position.z = -1;
+scene.add(axesHelper);
 //Stars
 function addStar() {
   const geometry = new THREE.SphereGeometry(0.25);
@@ -102,24 +106,33 @@ const controls = new OrbitControls(camera, renderer.domElement);
 // Temp state
 const controller = new Controller(0, scene);
 const player = new Player(null, null);
+let xrPos = new THREE.Vector3();
+let xrQuat = new THREE.Quaternion();
 
 // Animation loop
 let prevTime = performance.now();
 let vrInit = false;
+let errMessage = "No errors"
 function animate() {
   if(renderer.xr.isPresenting && !vrInit) {
     vrInit = true;
     console.log('Entered VR');
 
-    const xrCam = renderer.xr.getCamera(camera);
-    xrCam.updateMatrixWorld(true);
-    const worldPos = new THREE.Vector3();
-    xrCam.getWorldPosition(worldPos);
+    // const xrCam = renderer.xr.getCamera(camera);
+    // xrCam.updateMatrixWorld(true);
+    // xrCam.getWorldPosition(xrPos);
+
+    // try {
+    //   player.updateCameraRig(xrCam);
+    // } catch(err) { 
+    //   errMessage = err.message;
+    // }
+    
 
     // Send to backend
     const data = {
       type: "enter_vr",
-      position: worldPos,
+      // position: worldPos,
     };
     socket.send(JSON.stringify(data));
   }
@@ -138,12 +151,29 @@ function animate() {
 
   const ppos = player?.position ?? {};
   const cpos = controller.position;
+  const cq = controller.quaternion.toArray();
+  const xrCam = renderer.xr.getCamera(camera);
+    // xrCam.updateMatrixWorld(true);
+  xrCam.getWorldPosition(xrPos);
+  xrQuat.copy(xrCam.quaternion);
+  const yawFromQuat = (quat) => new THREE.Euler().setFromQuaternion(quat, "YXZ").y;
   drawDebugText(
-    ["Player", ppos.x, ppos.y, ppos.z],
-    ["Move", cpos.x, cpos.y, cpos.z],
+    // ["Player", ppos.x, ppos.y, ppos.z],
+    // ["YawOffset", controller.yawOffset],
+    ["MovePos", cpos.x, cpos.y, cpos.z],
+    ["MoveQuat", ...cq],
     {
-      Scale: controller.scale.toFixed(2), 
-      CalibMode: player?.calibrationMode
+      Scale: controller.physicalScale.toFixed(2),
+      Btn: controller.buttons,
+      Calib: player.calibrationMode
+    },
+    // {err: errMessage},
+    {playerPos: player.position.toArray().map(v=>v.toFixed(2))},
+    {debug: window._debug},
+    {
+      xrYaw: yawFromQuat(xrCam.quaternion).toFixed(2) ?? "X", 
+      // xrQuat: xrCam.quaternion.toArray().map(v => v.toFixed(2))
+      xrQuat: xrQuat.toArray().map(v => v.toFixed(2))
     }
   );
   renderer.render(scene, camera);
@@ -162,19 +192,23 @@ document.body.appendChild(VRButton.createButton(renderer));
 
 // Debug
 const debugCanvas = document.createElement('canvas');
-debugCanvas.width = 192;
+// debugCanvas.width = 192;
+debugCanvas.width = 288;
 debugCanvas.height = 96;
 const ctx = debugCanvas.getContext('2d');
 
 const debugTexture = new THREE.CanvasTexture(debugCanvas);
 const debugMaterial = new THREE.SpriteMaterial({ map: debugTexture, depthTest: false, transparent: true });
 const debugSprite = new THREE.Sprite(debugMaterial);
-debugSprite.scale.set(0.5, 0.25, 1);
+// debugSprite.scale.set(0.5, 0.25, 1);
+debugSprite.scale.set(0.75, 0.25, 1);
 
 // debugSprite.position.set(-0.4, 0.55, -1); // relative to camera
-debugSprite.position.set(0, 0.2, -1); // relative to camera
+debugSprite.position.set(0.1, 0.1, -1); // relative to camera
 camera.add(debugSprite); // attaches to camera
-scene.add(camera);
+player.cameraRig.add(camera);
+scene.add(player.cameraRig);
+// scene.add(camera);
 
 function drawDebugText(...args) {
   ctx.clearRect(0, 0, debugCanvas.width, debugCanvas.height);
@@ -213,11 +247,16 @@ socket.onopen = () => {
   console.log("Connected to server");
   // socket.send('Hello from client!');
   cameraSyncInterval = setInterval(() => {
-    const playerCamera = renderer.xr.isPresenting ? renderer.xr.getCamera(camera) : camera;
+    // const xrCam = renderer.xr.getCamera(camera);
+    // const playerCamera = renderer.xr.isPresenting ? renderer.xr.getCamera(camera) : camera;
     const syncData = {
-      type: "sync_camera",
-      quaternion: playerCamera.quaternion
+      type: "sync_player",
+      // quaternion: playerCamera.quaternion
+      // quaternion: xrCam.quaternion.toArray()
+      position: xrPos,
+      quaternion: xrQuat.toArray(),
     }
+    // window._debug = syncData.quaternion.map(v=>v.toFixed(2));
     socket.send(JSON.stringify(syncData));
   }, 1000 / 30);
 };
@@ -229,34 +268,43 @@ socket.onclose = () => {
 
 socket.onmessage = (event) => {
   const data = JSON.parse(event.data);
-  console.log("Received:", data);
+  // console.log("Received:", data);
 
   // TODO: some kind of initialization for proper multiplayer support
   if(data.type === "init") {
-    player = new Player(data.playerId)
+    player.id = data.playerId;
   }
 
   if(data.type === "sync") {
     const sync = data.sync;
 
     const controllerData = data.sync[Sync.CONTROLLER][0];
-    console.log("controllerData", controllerData);
+    // console.log("controllerData", controllerData);
     // TODO: should be generic and automated
-    controller.position.set(
-      controllerData.position.x,
-      controllerData.position.y,
-      controllerData.position.z,
-    );
+    const {x, y, z} = controllerData.position;
+    controller.position.set(x, y, z);
     controller.quaternion.set(...controllerData.quaternion);
     controller.updateTransform();
-    if(controllerData.scale) {
-      controller.scale = controllerData.scale 
-    }
-    if(controllerData.calibrationMode) {
-      controller.calibrationMode = controllerData.calibrationMode 
-    }
+    const controllerKeys = ["physicalScale", "buttons"];
+    controllerKeys.forEach((key) => {
+      if(typeof controllerData[key] !== "undefined") {
+        controller[key] = controllerData[key];
+      }
+    });
+    const playerData = data.sync[Sync.PLAYER][player.id];
+    // console.log(data.sync[Sync.PLAYER])
     
-    // data.sync[Sync.CONTROLLER]["0"].forEach()
+    if(playerData) {
+      let text = "";
+      for(const [k,v] of Object.entries(playerData)) {
+        text += `${k}:${v}`
+      }
+      if(text) { window._debug = text; }
+      const playerKeys = ["yawOffset", "calibrationMode", "position"];
+      playerKeys.forEach((key) => {
+        player.syncProp(key, playerData[key]);
+      });
+    }
   }
 };
 

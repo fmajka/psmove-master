@@ -36,18 +36,22 @@ export default class IOServer {
 			ws.on("message", (msg) => {
 				try {
 					const data = JSON.parse(msg.toString());
-					if(data.type === "sync_camera") {
+					if(data.type === "sync_player") {
 						// console.log(addr, data.quaternion);
+						const {x, y, z} = data.position;
+						GameServer.setPlayerPosition(addr, new THREE.Vector3(x, y, z));
 						GameServer.setPlayerRotation(addr, new THREE.Quaternion(...data.quaternion));
+						// console.log(...data.quaternion)
 					}
 					else if(data.type === "enter_vr") {
 						const player = GameServer.getPlayer(addr);
 						// TODO: proper Player prop
 						player.vr = true;
-						const {x, y, z} = data.position;
-						player.position.set(x, y, z);
+						// const {x, y, z} = data.position;
+						// player.position.set(x, y, z);
 						console.log(addr, "is now VR on position", player.position);
-						console.log("presenting", data.presenting);
+						// TODO: only emit id to the target? Probably no...?
+						this.emit({type: "init", playerId: addr})
 					}
 				} catch(err) {
 					console.log("IOServer onmessage error:", err.message);
@@ -96,6 +100,7 @@ export default class IOServer {
 				)])
 			)
 		);
+		// console.log(sync)
 		// Send data to each connected client
 		IOServer.emit({type: "sync", sync});
 		// Clear sync cache

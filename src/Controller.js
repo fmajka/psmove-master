@@ -18,35 +18,58 @@ export default class Controller {
 		// Button states
 		this.buttons = 0;
 		this.changed = 0;
+		this.timePressed = {};
 		this.trigger = 0;
+
+		// Upon holding the select button for at least one second, a hard reset request is sent
+		this.hardResetProcessed = false;
 
 		/**
 		 * The controller's physical position captured by PSMS
 		 * @type {THREE.Vector3}
 		 */
-		this.physicalPos = new THREE.Vector3();
+		this.physicalPosition = new THREE.Vector3();
 
 		/**
 		 * Scales the controller's physical position from PSMS to better match reality
 		 * @type {Number}
 		 */
-		this.scale = 1.0;
+		this.physicalScale = 1.0;
 
 		/**
 		 * The controller's virtual position offset
 		 * @type {THREE.Vector3}
 		 */
-		this.offset = new THREE.Vector3();
+		this.offsetPosition = new THREE.Vector3();
 
 		/**
 		 * The controller's in-game position
-		 * position = physicalPos * scale + virtualPos
+		 * position = physicalPosition * scale + virtualPos
 		 * @type {THREE.Vector3}
 		 */
 		this.position = new THREE.Vector3();
 
 		/**
-		 * The controller's rotation in 3D space
+		 * The controller's physical orientation captured by PSMS
+		 * @type {THREE.Quaternion}
+		 */
+		this.physicalQuaternion = new THREE.Quaternion();
+
+		/**
+		 * Quaternion offset for adjusting drift
+		 * @type {THREE.Quaternion}
+		 */
+		this.offsetQuaternion = new THREE.Quaternion();
+
+		/**
+		 * Offset used for adjusting controller/player camera drift
+		 * @type {Number}
+		 */
+		this.yawOffset = 0.0;
+
+		/**
+		 * The controller's in-game orientation
+		 * quaternion = physicalQuaternion with yaw offset by yawOffset
 		 * @type {THREE.Quaternion}
 		 */
 		this.quaternion = new THREE.Quaternion();
@@ -86,10 +109,17 @@ export default class Controller {
 		this.localOffset.add(this.localPivot);
 	}
 
-	// Returns actual in-game position
+	// Updates actual in-game position
 	updatePosition() {
-		this.position = this.physicalPos.clone().multiplyScalar(this.scale).add(this.offset);
-		return this.position;
+		this.position = this.physicalPosition.clone().multiplyScalar(this.physicalScale).add(this.offsetPosition);
+	}
+
+	// Updates actual in-game orientation
+	updateQuaternion() {
+		// const yawQuaternion = new THREE.Quaternion();
+		// yawQuaternion.setFromAxisAngle(new THREE.Vector3(0, 1, 0), this.yawOffset);
+		// this.quaternion = yawQuaternion.multiply(this.physicalQuaternion);
+		this.quaternion.multiplyQuaternions(this.offsetQuaternion, this.physicalQuaternion);
 	}
 
 	updateTransform() {

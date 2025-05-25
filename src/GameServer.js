@@ -33,7 +33,14 @@ export default class GameServer {
 	static setPlayerRotation(id, quaternion) {
 		const player = this.state.players.get(id);
 		if(!player) { return; }
-		player.quaternionLocal = quaternion; 
+		player.physicalQuaternion = quaternion;
+		player.updateQuaternion();
+	}
+
+	static setPlayerPosition(id, vector) {
+		const player = this.state.players.get(id);
+		if(!player) { return; }
+		player.position = vector;
 	}
 
 	// TODO: it's only temporary
