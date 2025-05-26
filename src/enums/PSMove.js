@@ -10,6 +10,8 @@ const PSMove = {
     Btn_PS: 1 << 16, /*!< PS button, front center */
     Btn_MOVE: 1 << 19, /*!< Move button, big front button */
     Btn_T: 1 << 20, /*!< Trigger, on the back */
+
+    MAX_CONTROLLER_COUNT: 10,
 };
 
 export default PSMove;

@@ -1,29 +1,8 @@
-import Controller from "./Controller.js";
-import GameState from "./GameState.js";
-import Player from "./Player.js";
 import * as THREE from 'three';
+import StateBase from "./StateBase.js";
 
 export default class GameServer {
-	static state = new GameState();
-
-	/**
-	 * Returns the controller object with given id, creating one if it doesn't exits
-	 * @param {number} id
-	 * @returns {Controller}
-	 */
-	static getController(id) {
-		if(!this.state.controllers.has(id)) {
-			this.state.controllers.set(id, new Controller(id));
-		}
-		return this.state.controllers.get(id);
-	}
-
-	static getPlayer(id) {
-		if(!this.state.players.has(id)) {
-			this.state.players.set(id, new Player(id));
-		}
-		return this.state.players.get(id);
-	}
+	static state = new StateBase();
 
 	/**
 	 * Syncs the player's local rotation
@@ -31,21 +10,22 @@ export default class GameServer {
 	 * @param {THREE.Quaternion} quaternion
 	 */
 	static setPlayerRotation(id, quaternion) {
-		const player = this.state.players.get(id);
+		const player = this.state.entities.get(id);
 		if(!player) { return; }
 		player.physicalQuaternion = quaternion;
 		player.updateQuaternion();
 	}
 
 	static setPlayerPosition(id, vector) {
-		const player = this.state.players.get(id);
+		const player = this.state.entities.get(id);
 		if(!player) { return; }
 		player.position = vector;
 	}
 
 	// TODO: it's only temporary
 	static getFirstVRPlayer() {
-		for(const player of GameServer.state.players.values()) {
+		// TODO: a set of connected player ids
+		for(const player of this.state.entities.values()) {
 			if(player.vr) { return player; }
 		}
 		return null;
