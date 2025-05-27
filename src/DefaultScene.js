@@ -5,6 +5,8 @@ export default class DefaultScene extends THREE.Scene {
 		super();
 		
 		this.textureLoader = new THREE.TextureLoader();
+		// Object for storing texture references
+		this.textures = {};
 
 		// Display axes helper in front of the player
 		this.axesHelper = null;
@@ -12,7 +14,16 @@ export default class DefaultScene extends THREE.Scene {
 		// Just a torus
 		this.torus = null;
 
+		this.initTextures({
+			admixon: "/admixon_face.jpg"
+		});
 		this.initGraphics();
+	}
+
+	initTextures(textureMap) {
+		for(const [name, path] of Object.entries(textureMap)) {
+			this.textures[name] = this.textureLoader.load(path);
+		}
 	}
 
 	initGraphics() {
@@ -21,7 +32,7 @@ export default class DefaultScene extends THREE.Scene {
 		// Axes helper
 		this.axesHelper = new THREE.AxesHelper(5);
 		// TODO: always move in front of players camera
-		this.axesHelper.position.z = -1;
+		this.axesHelper.position.set(0, 15, -1);
 		this.add(this.axesHelper);
 
 		// Example torus
@@ -30,15 +41,15 @@ export default class DefaultScene extends THREE.Scene {
 			color: 0xffffff,
 		});
 		this.torus = new THREE.Mesh(geometry, material);
-		this.torus.position.y = 8;
+		this.torus.position.y = 22;
 		this.add(this.torus);
 
 		// Light
 		const pointLight = new THREE.PointLight(0x00ff00, 5);
 		pointLight.position.set(7, 7, 7);
-		const ambientLight = new THREE.AmbientLight(0xffffff, 1.0);
-		const sun = new THREE.PointLight(0xffffaa, 10, 0, 0);
-		sun.position.set(100, 20, 0);
+		const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+		const sun = new THREE.PointLight(0xffffaa, 5, 0, 0);
+		sun.position.set(100, 100, 100);
 		this.add(pointLight, ambientLight, sun);
 
 		// Stars
@@ -53,7 +64,7 @@ export default class DefaultScene extends THREE.Scene {
 			return star;
 		}
 		for(let i = 0; i < 200; i++) {
-			this.add(createStar());
+			// this.add(createStar());
 		}
 		
 		// Skybox
@@ -68,7 +79,7 @@ export default class DefaultScene extends THREE.Scene {
 		this.add(skybox);
 		
 		// Ground
-		const groundGeometry = new THREE.PlaneGeometry(64, 64, 64, 64);
+		const groundGeometry = new THREE.PlaneGeometry(64, 64, 128, 128);
 		const groundTexture = this.textureLoader.load("/textures/grass_01_1k/grass_01_color_1k.png");
 		groundTexture.wrapS = groundTexture.wrapT = THREE.RepeatWrapping;
 		groundTexture.repeat.set(16, 16);
@@ -80,8 +91,10 @@ export default class DefaultScene extends THREE.Scene {
 			displacementScale: 16,
 		});
 		const groundMesh = new THREE.Mesh(groundGeometry, groundMaterial);
+		// groundMesh.rotation.z = Math.PI;
 		groundMesh.rotation.x = -Math.PI / 2;
-		groundMesh.position.y = -15;
+		groundMesh.position.y = 0;
+		// groundMesh.position.y = -15;
 		this.add(groundMesh);
 	}
 

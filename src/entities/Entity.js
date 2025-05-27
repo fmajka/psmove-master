@@ -2,12 +2,6 @@ import * as THREE from 'three';
 
 export default class Entity {
 
-	/**
-	 * Entity context for the sync setters
-	 * @type {Entity}
-	 */
-	static syncObj = null;
-
 	static setters = {
 		position: (_, value) => {
 			const {x, y, z} = value; 
@@ -53,7 +47,6 @@ export default class Entity {
 	 */
 	syncProp(key, value) {
 		if(typeof value === "undefined") { return; }
-		this.constructor.syncObject = this;
 		this[key] = this.getSyncSetter(key)?.(this, value) ?? value;
 	}
 

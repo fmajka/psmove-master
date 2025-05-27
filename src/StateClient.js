@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import StateBase from './StateBase.js';
+import Player from './entities/EntityPlayer.js';
+import Controller from './entities/EntityController.js';
 
 export default class StateClient extends StateBase {
 	constructor() {
@@ -8,8 +10,14 @@ export default class StateClient extends StateBase {
 		this.xrPosition = new THREE.Vector3();
 		this.xrQuaternion = new THREE.Quaternion();
 
-		// Easy references for the clients's player and controller objects
+		/**
+		 * @type {Player}
+		 */
 		this.localPlayer = null;
+
+		/**
+		 * @type {Controller}
+		 */
 		this.localController = null;
 	}
 

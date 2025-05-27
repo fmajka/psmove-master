@@ -4,18 +4,6 @@ import EntityPhysical from './EntityPhysical.js';
 
 export default class Controller extends EntityPhysical {
 
-	static setters = {
-		position: (entity, value) => {
-			const {x, y, z} = value;
-			entity.localOffset.position.set(x, y, z);
-			return new THREE.Vector3(x, y ,z);
-		},
-		quaternion: (entity, value) => { 
-			entity.localPivot.quaternion.set(...value);
-			new THREE.Quaternion(...value);
-		},
-	}
-
 	/**
 	 * Represents a PlayStation Move controller
 	 * @param {Number} id - ID (array index) of the controller
@@ -47,44 +35,45 @@ export default class Controller extends EntityPhysical {
 		// Client-side only(?)
 		if(!scene) { return; }
 
-		this.localPivot = null;
-		this.localOffset = null;
 		this.initModel();
-		scene.add(this.localOffset);
+		scene.add(this.translateRef);
 	}
 
 	initModel() {
 		const stick = new THREE.Mesh(
 			new THREE.BoxGeometry(0.04, 0.04, 0.14),
-			new THREE.MeshBasicMaterial({ color: 0x222222 })
+			new THREE.MeshStandardMaterial({ color: 0x222222 })
 		);
 		stick.position.z = 0.09;
 		const trigger = new THREE.Mesh(
 			new THREE.BoxGeometry(0.02, 0.02, 0.03),
-			new THREE.MeshBasicMaterial({ color: 0x444444 })
+			new THREE.MeshStandardMaterial({ color: 0x444444 })
 		);
 		trigger.position.y = -0.02;
 		trigger.position.z = 0.05;
 		trigger.rotateX(Math.PI / 6);
 		const bulb = new THREE.Mesh(
 			new THREE.SphereGeometry(0.025),
-			new THREE.MeshBasicMaterial({ color: 0xff44ff })
+			new THREE.MeshStandardMaterial({ color: 0xff44ff })
 		);
 		// Pivot for rotation
-		this.localPivot = new THREE.Object3D();
-		this.localPivot.add(stick);
-		this.localPivot.add(trigger);
-		this.localPivot.add(bulb);
+		this.pivotRef = new THREE.Object3D();
+		this.pivotRef.add(stick);
+		this.pivotRef.add(trigger);
+		this.pivotRef.add(bulb);
 		// Offset for translation
-		this.localOffset = new THREE.Object3D();
-		this.localOffset.add(this.localPivot);
+		this.translateRef = new THREE.Object3D();
+		this.translateRef.add(this.pivotRef);
 	}
 
 	/**
 	 * Additionally multiplies the physical position by the scale
 	 * @override
 	 */
-	updatePosition() {
-		this.position.copy(this.physicalPosition).multiplyScalar(this.physicalScale).add(this.offsetPosition);
+	updatePosition(offsetArg) {
+		this.position.copy(this.physicalPosition).multiplyScalar(this.physicalScale).add(this.offsetPosition)
+		if(offsetArg) {
+			this.position.add(offsetArg);
+		}
 	}
 }

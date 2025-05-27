@@ -8,7 +8,30 @@
     <title>Vite App!</title>
   </head>
   <body>
-    <script type="module" src="/src/main.js"></script>
+    <script type="module" src="/src/main.js" defer></script>
+    <script>
+      window.controllers = [
+        {id: 0, colorId: 0, playerId: "::whatever"},
+        {id: 1, colorId: 4, playerId: null},
+        {id: 2, colorId: 4, playerId: null},
+      ]
+    </script>
     <!-- <script type="module" src="/src/ws.js"></script> -->
+     
+    <div x-data="{ open: false }" style="position: absolute; display: flex; flex-direction: column; align-items: start;">
+      <template x-for="controller in window.controllers">
+        <div>
+          <h2 x-text="controller.id"></h2>
+          <!-- <p>
+            Color: <span x-text="controller.colorId"></span>
+          </p> -->
+          <button x-on:click="window._io.send({type: 'controller_select', id: controller.id})">
+            <!-- Owner: <span x-text="controller.playerId"></span> -->
+            WYBIERZ MNIE
+          </button>
+        </div>
+      </template>
+    </div>
+
   </body>
 </html>

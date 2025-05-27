@@ -7,7 +7,7 @@ export default class IOServer {
 	static wss = null;
 	static nextId = 0;
 
-	static clients = new Set();
+	static clients = new Map();
 
 	/**
 	 * Maps entity id to a set of property keys that were changed last tick
@@ -24,23 +24,25 @@ export default class IOServer {
 			const addr = req.socket.remoteAddress;
 
 			console.log(`Client ${clientId} connected`, addr);
-			this.clients.add(ws);
+			this.clients.set(addr, ws);
 			// Used for initialization...?
 			// TODO: do I even need to do this?
-			GameServer.state.getEntity(addr, Player);
+			// GameServer.state.getEntity(addr, Player);
 
 			ws.on('close', () => {
 				console.log(`Client ${clientId} disconnected`, addr);
-				this.clients.delete(ws);
+				this.clients.delete(addr);
 			});
 
 			ws.on("message", (msg) => {
 				try {
 					const data = JSON.parse(msg.toString());
 					if(data.type === "sync_player") {
+						if(!GameServer.state.entities.has(addr)) { return; }
 						const {x, y, z} = data.position;
 						GameServer.setPlayerPosition(addr, new THREE.Vector3(x, y, z));
 						GameServer.setPlayerRotation(addr, new THREE.Quaternion(...data.quaternion));
+						IOServer.addSync(addr, "position", "quaternion");
 					}
 					else if(data.type === "enter_vr") {
 						const player = GameServer.state.getEntity(addr, Player);
@@ -50,7 +52,12 @@ export default class IOServer {
 						// player.position.set(x, y, z);
 						console.log(addr, "is now VR on position", player.position);
 						// TODO: only emit id to the target? Probably no...?
-						this.emit({type: "init", playerId: addr})
+						this.emit({type: "init", playerId: addr}, ws)
+					}
+					else if(data.type === "controller_select") {
+						console.log(data)
+						const controllerId = data.id;
+						GameServer.setPlayerController(addr, controllerId)
 					}
 				} catch(err) {
 					console.log("IOServer onmessage error:", err.message);
@@ -95,5 +102,9 @@ export default class IOServer {
 		this.emit({type: "sync", sync});
 		// Clear sync cache
 		this.syncCache.clear();
+	}
+
+	static getActiveClientIDs() {
+		return this.clients.keys();
 	}
 }

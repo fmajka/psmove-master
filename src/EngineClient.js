@@ -24,9 +24,17 @@ export default class Engine {
 
 	static isXRInit = false;
 
+	/**
+	 * Sets the client's player object reference to the given player
+	 * @param {Player} player 
+	 */
 	static setLocalPlayer(player) {
+		const prev = this.state.localPlayer;
+		if(prev) { prev.translateRef.visible = true; }
 		this.state.localPlayer = player;
+		player.translateRef.visible = false;
 		player.cameraRig.add(this.camera);
+		console.log(player)
 	}
 
 	static initXR() {
@@ -64,7 +72,7 @@ export default class Engine {
 		this.scene = new DefaultScene();
 		// Default perspective camera
 		this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 1000);
-		this.camera.position.setZ(2);
+		this.camera.position.set(0, 15, 2);
 		this.scene.add(this.camera);
 
 		// Rendering
@@ -78,6 +86,7 @@ export default class Engine {
 
 		// Default non-VR mode controls
 		this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+		this.controls.target.set(0, 15, 0)
 
 		// Window for printing debug info
 		this.debugWindow = new UIWindow(

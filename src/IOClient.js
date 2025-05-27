@@ -1,5 +1,6 @@
 import Engine from "./EngineClient.js";
 import Player from "./entities/EntityPlayer.js";
+import Alpine from "alpinejs";
 
 export default class IOClient {
 	static ipAddr = null;
@@ -12,12 +13,21 @@ export default class IOClient {
 	}
 
 	static connect(ipAddr) {
+		// TODO: dirty
+		window._io = this;
+		window.Alpine = Alpine;
+		Alpine.start();
+		Alpine.store("controllers", [
+			{id: 0, colorId: 0, playerId: "::whatever"},
+			{id: 1, colorId: 4, playerId: null},
+		])
 		// Skip if already connected
 		if(this.socket) { return; }
 		const socket = this.socket = new WebSocket(this.ipAddr = ipAddr);
 		// Upon connecting 
 		socket.onopen = () => {
 			console.log("Connected to server");
+			Engine.isXRInit = false;
 			// Stop reconnect interval if started
 			if(this.reconnectInterval) {
 				clearInterval(this.reconnectInterval);
@@ -60,6 +70,11 @@ export default class IOClient {
 
 			if(data.type === "sync") {
 				Engine.sync(data.sync);
+			}
+
+			if(data.type === "controller_list") {
+				Alpine.store("controllers", data.list);
+				console.log(data.list)
 			}
 		};
 	}

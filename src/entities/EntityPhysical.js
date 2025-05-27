@@ -3,6 +3,18 @@ import Entity from "./Entity.js";
 
 export default class EntityPhysical extends Entity {
 
+	static setters = {
+		position: (entity, value) => {
+			const {x, y, z} = value;
+			entity.translateRef?.position.set(x, y, z);
+			return new THREE.Vector3(x, y ,z);
+		},
+		quaternion: (entity, value) => { 
+			entity.pivotRef?.quaternion.set(...value);
+			return new THREE.Quaternion(...value);
+		},
+	}
+
 	constructor(id) {
 		super(id);
 
@@ -35,6 +47,10 @@ export default class EntityPhysical extends Entity {
 		 * @type {Number}
 		 */
 		this.yawOffset = 0.0;
+
+		// Client-side
+		this.pivotRef = null;
+		this.translateRef = null;
 	}
 
 	/**

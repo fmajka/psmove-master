@@ -183,7 +183,7 @@ class PSMoveConsoleClient {
                 | BTNBIT(state.TriggerButton, Btn_T);
                 unsigned char trigger = state.TriggerValue;
                 
-                printf("move_update %d %f %f %f %f %f %f %f %d %d\n", 
+                printf("move_update %d %f %f %f %f %f %f %f %d %d %d\n", 
                     i,
                     state.Pose.Position.x, 
                     state.Pose.Position.y, 
@@ -193,7 +193,8 @@ class PSMoveConsoleClient {
                     state.Pose.Orientation.y,
                     state.Pose.Orientation.z,
                     buttons,
-                    trigger
+                    trigger,
+                    state.TrackingColorType
                 );
                 fflush(stdout);
             }

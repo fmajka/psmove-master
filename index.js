@@ -6,12 +6,14 @@ import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import readline from 'readline';
+import sharp from 'sharp';
 import * as THREE from 'three';
 
 import GameServer from './src/GameServer.js';
 import IOServer from './src/IOServer.js';
 import PSMove from './src/enums/PSMove.js';
 import Controller from './src/entities/EntityController.js';
+import Player from './src/entities/EntityPlayer.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -54,7 +56,7 @@ async function startServer() {
 
   const yawFromQuat = (quat) => { 
     const result = new THREE.Euler().setFromQuaternion(quat, "YXZ").y
-    console.log("yawFromQuat", quat.toArray().map(v => v.toFixed(2)), result);
+    // console.log("yawFromQuat", quat.toArray().map(v => v.toFixed(2)), result);
     return result;
   };
 
@@ -78,7 +80,7 @@ async function startServer() {
       player.yawOffset = targetYaw - playerYaw;
       player.updateQuaternion();
       console.log(`${player.yawOffset} = ${targetYaw} - ${playerYaw}`, player.quaternion.toArray().map(v => v.toFixed(2)));
-      IOServer.addSync(player.id, "yawOffset");
+      IOServer.addSync(player.id, "quaternion", "yawOffset");
     }
     // Reset position
     else if(dotUp >= verticalThreshold) {
@@ -104,15 +106,15 @@ async function startServer() {
   */
   const processButtons = (controller) => {
     const player = GameServer.getFirstVRPlayer();
+    // if(doPrint) console.log("First vr player", !!player);
     if(!player) { return; }
     IOServer.addSync(player.id, "position");
     const justPressed = (btn) => controller.buttons & controller.changed & btn;
     const justReleased = (btn) => ~controller.buttons & controller.changed & btn;
-    const calibToggle = controller.changed & controller.buttons & PSMove.Btn_START;
-    if(calibToggle) {
+    if(justPressed(PSMove.Btn_START)) {
       player.calibrationMode = !player.calibrationMode;
       IOServer.addSync(player.id, "calibrationMode");
-      console.log("calibMode changed to", player.calibrationMode);
+      console.log("calibrationMode changed to", player.calibrationMode);
     }
     const trigger = controller.buttons & PSMove.Btn_T;
     // Process calibration inputs
@@ -139,7 +141,80 @@ async function startServer() {
         console.log("hardResetProcessed set to", controller.hardResetProcessed)
       }
     }
+    // Normal inputs
+    else {
+      player.isMoving = controller.buttons & PSMove.Btn_MOVE;
+    }
   }
+
+  // WORLD
+  const PLANE_SIZE = 64;
+  const DISPLACEMENT_SCALE = 16;
+
+  // Convert world to UV coordinates
+  const worldToUV = (x, z) => {
+    const u = (x + PLANE_SIZE / 2) / PLANE_SIZE;
+    const v = (z + PLANE_SIZE / 2) / PLANE_SIZE; // flip Y
+    // const v = 1 - (z + PLANE_SIZE / 2) / PLANE_SIZE; // flip Y
+    return { u, v };
+  }
+
+  // Load and parse heightmap
+  async function loadHeightMap(filePath) {
+    const { data, info } = await sharp(filePath)
+      // .resize(SEGMENTS_X, SEGMENTS_Y)
+      .greyscale()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+
+    return (x, z) => {
+      const { u, v } = worldToUV(x, z);
+      const i = Math.floor(u * (info.width - 1));
+      const j = Math.floor(v * (info.height - 1));
+
+      const heightNorm = data[j * info.width + i] / 255;
+      return (heightNorm || 0.5) * DISPLACEMENT_SCALE;
+    };
+  }
+
+  const getWorldHeight = await loadHeightMap("./public/heightmap.png");
+
+  // Game tick, 30 per second
+  setInterval(() => {
+    // TODO: proper delta time xd
+    const dt = 1 / 30;
+    // Player movement
+    for(const playerId of IOServer.getActiveClientIDs()) {
+      if(!GameServer.state.entities.has(playerId)) { continue; }
+      /**
+       * @type {Player} player
+       */
+      const player = GameServer.state.getEntity(playerId);
+      if(player.isMoving) {
+        const yaw = yawFromQuat(player.quaternion);
+        // TODO: player speed (1m/s?)
+        const moveDelta = -3 * dt; 
+        const x = player.offsetPosition.x + Math.sin(yaw) * moveDelta;
+        const z = player.offsetPosition.z + Math.cos(yaw) * moveDelta;
+        const y = getWorldHeight(x, z);
+        player.offsetPosition.set(x, y, z);
+        player.updatePosition();
+        console.log(player.position)
+        IOServer.addSync(player.id, "position", "offsetPosition");
+        // TODO: need to assign a controller to a player
+        const controller = GameServer.state.getEntity(0, Controller);
+        controller.updatePosition(player.offsetPosition);
+        IOServer.addSync(controller.id, "position");
+      }
+    }
+    // Movement tick
+    // const height = getWorldHeight(x, z);
+    // console.log(`Height at (${x}, ${z}) is approximately ${height.toFixed(2)}`);
+    // x += (Math.random() - 0.5) * 2;
+    // z += (Math.random() - 0.5) * 2;
+    // Sync data with clients
+    IOServer.emitSync();
+  }, 1000 / 30);
   
   // Process line of PSMOVE data
   let prevTime = null;
@@ -155,10 +230,14 @@ async function startServer() {
       // if(doPrint) { console.log(line); }
       // Convert data array to object with named properties
       const msg = {};
-      ["type", "id", "x", "y", "z", "qw", "qx", "qy", "qz", "buttons", "trigger"]
+      ["type", "id", "x", "y", "z", "qw", "qx", "qy", "qz", "buttons", "trigger", "colorId"]
         .forEach((key, i) => msg[key] = (key === "type") ? data[i] : Number(data[i]));
       // Update server-side controller
       const controller = GameServer.state.getEntity(msg.id, Controller);
+      // TODO: better controller access
+      if(!GameServer.controllerCache.has(controller)) {
+        GameServer.controllerCache.add(controller);
+      }
       const changed = controller.buttons ^ msg.buttons;
       controller.physicalPosition.set(msg.x / 100, msg.y / 100, msg.z / 100);
       controller.updatePosition();
@@ -166,15 +245,16 @@ async function startServer() {
       controller.updateQuaternion();
       controller.buttons = msg.buttons;
       controller.changed = changed;
+      // TODO: proper color handling
+      controller.colorId = msg.colorId;
+      // if(doPrint) { console.log(controller.color) }
       // Track time pressed
       const btnTime = controller.timePressed;
       for(const buttonValue of Object.values(PSMove)) {
         btnTime[buttonValue] = (controller.buttons & buttonValue) ? (btnTime[buttonValue] ?? 0) + dt : 0;
       }
-      IOServer.addSync(controller.id, "position", "quaternion", "buttons", "changed");
+      IOServer.addSync(controller.id, "position", "quaternion", "buttons", "changed", "colorId");
       processButtons(controller);
-      // Emit info to clients
-      IOServer.emitSync();
       // Print once a second debug
       if(doPrint) { doPrint = false; setTimeout(() => doPrint = true, 1000); }
     }
