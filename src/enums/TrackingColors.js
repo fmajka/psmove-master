@@ -1,3 +1,4 @@
+// TODO: delete?
 const TrackingColors = {
   0: "#ff00ff",
 	1: "#00ffff",

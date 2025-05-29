@@ -31,6 +31,8 @@ enum PSMove_Button {
     Btn_T = 1 << 20, /*!< Trigger, on the back */
 };
 
+unsigned int colorTypeToValue[] = { 0xff00ff, 0x00ffff, 0xffff00, 0xff0000, 0x00ff00, 0x0000ff };
+
 #define BTNBIT(button, bit) (button ? bit : 0)
 
 class PSMoveConsoleClient {
@@ -99,11 +101,13 @@ class PSMoveConsoleClient {
                 PSMControllerDataStreamFlags::PSMStreamFlags_includeRawTrackerData;
                 
                 if (controllerList.count > 0) {
-                    if (PSM_AllocateControllerListener(controllerList.controller_id[0]) != PSMResult_Success) {
-                        success= false;
-                    }
-                    if (PSM_StartControllerDataStream(controllerList.controller_id[0], data_stream_flags, PSM_DEFAULT_TIMEOUT) != PSMResult_Success) {
-                        success= false;
+                    for(int i = 0; i < controllerList.count; i++) {
+                        if (PSM_AllocateControllerListener(controllerList.controller_id[i]) != PSMResult_Success) {
+                            success= false;
+                        }
+                        if (PSM_StartControllerDataStream(controllerList.controller_id[i], data_stream_flags, PSM_DEFAULT_TIMEOUT) != PSMResult_Success) {
+                            success= false;
+                        }
                     }
                 } else {
                     std::cout << "PSMoveConsoleClient::startup() - No controllers found." << std::endl;
@@ -140,15 +144,19 @@ class PSMoveConsoleClient {
             PSMControllerDataStreamFlags::PSMStreamFlags_includeRawTrackerData;
             
             // Stop all controller streams
-            PSM_StopControllerDataStream(controllerList.controller_id[0], PSM_DEFAULT_TIMEOUT);
+            for(int i = 0; i < controllerList.count; i++) {
+                PSM_StopControllerDataStream(controllerList.controller_id[i], PSM_DEFAULT_TIMEOUT);
+            }
             
             // Get the current controller list
             rebuildControllerList();
             
             // Restart the controller streams
             if (controllerList.count > 0) {
-                if (PSM_StartControllerDataStream(controllerList.controller_id[0], data_stream_flags, PSM_DEFAULT_TIMEOUT) != PSMResult_Success) {
-                    m_keepRunning= false;
+                for(int i = 0; i < controllerList.count; i++) {
+                    if (PSM_StartControllerDataStream(controllerList.controller_id[i], data_stream_flags, PSM_DEFAULT_TIMEOUT) != PSMResult_Success) {
+                        m_keepRunning= false;
+                    }
                 }
             } else {
                 std::cout << "PSMoveConsoleClient::startup() - No controllers found." << std::endl;
@@ -194,7 +202,7 @@ class PSMoveConsoleClient {
                     state.Pose.Orientation.z,
                     buttons,
                     trigger,
-                    state.TrackingColorType
+                    colorTypeToValue[state.TrackingColorType]
                 );
                 fflush(stdout);
             }
@@ -233,9 +241,9 @@ class PSMoveConsoleClient {
     }
     
     void shutdown() {
-        if (controllerList.count > 0) {
-            PSM_StopControllerDataStream(controllerList.controller_id[0], PSM_DEFAULT_TIMEOUT);
-            PSM_FreeControllerListener(controllerList.controller_id[0]);
+        for(int i = 0; i < controllerList.count; i++) {
+            PSM_StopControllerDataStream(controllerList.controller_id[i], PSM_DEFAULT_TIMEOUT);
+            PSM_FreeControllerListener(controllerList.controller_id[i]);
         }
         // No tracker data streams started
         // No HMD data streams started

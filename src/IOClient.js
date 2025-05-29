@@ -4,23 +4,23 @@ import Alpine from "alpinejs";
 
 export default class IOClient {
 	static ipAddr = null;
+	/**
+	 * @type {WebSocket} socket
+	 */
 	static socket = null;
+	
 	static cameraSyncInterval = null;
 	static reconnectInterval = null;
 
 	static send(data) {
+		if(!this.socket?.readyState === WebSocket.OPEN) {
+			console.warn("IOClient.send(): not connected!");
+			return; 
+		}
 		this.socket.send(JSON.stringify(data));
 	}
 
 	static connect(ipAddr) {
-		// TODO: dirty
-		window._io = this;
-		window.Alpine = Alpine;
-		Alpine.start();
-		Alpine.store("controllers", [
-			{id: 0, colorId: 0, playerId: "::whatever"},
-			{id: 1, colorId: 4, playerId: null},
-		])
 		// Skip if already connected
 		if(this.socket) { return; }
 		const socket = this.socket = new WebSocket(this.ipAddr = ipAddr);
@@ -37,8 +37,8 @@ export default class IOClient {
 			this.cameraSyncInterval = setInterval(() => {
 				const syncData = {
 					type: "sync_player",
-					position: Engine.state.xrPosition,
-					quaternion: Engine.state.xrQuaternion.toArray(),
+					position: Engine.xrPosition,
+					quaternion: Engine.xrQuaternion.toArray(),
 				}
 				socket.send(JSON.stringify(syncData));
 			}, 1000 / 30);
@@ -62,19 +62,19 @@ export default class IOClient {
 
 			// TODO: some kind of initialization for proper multiplayer support
 			if(data.type === "init") {
-				// TODO: shouldn't have to pass scene here
-				const player = Engine.state.getEntity(data.playerId, Player, Engine.scene);
+				// TODO: shouldn't have to pass scene here(?)
+				const player = Engine.getEntity(data.playerId, Player, Engine.scene);
 				Engine.setLocalPlayer(player);
 				console.log("init", data)
 			}
 
-			if(data.type === "sync") {
+			else if(data.type === "sync") {
 				Engine.sync(data.sync);
 			}
 
-			if(data.type === "controller_list") {
+			else if(data.type === "controller_list") {
 				Alpine.store("controllers", data.list);
-				console.log(data.list)
+				console.log("controller_list", data.list)
 			}
 		};
 	}

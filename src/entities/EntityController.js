@@ -1,8 +1,18 @@
 import * as THREE from 'three';
-import Player from './EntityPlayer.js';
 import EntityPhysical from './EntityPhysical.js';
 
 export default class Controller extends EntityPhysical {
+
+	static setters = {
+		/**
+		 * Sets the LED bulb color, updating the mesh
+		 * @param {Number} value
+		 */
+		colorValue: (entity, value) => {
+			entity.bulb.material.color.setHex(value);
+			return value;
+		},
+	}
 
 	/**
 	 * Represents a PlayStation Move controller
@@ -18,10 +28,12 @@ export default class Controller extends EntityPhysical {
 		this.physicalScale = 1.0;
 		
 		/**
-		 * Player to which the controller belongs
-		 * @type {Player}
+		 * ID of the player the controller is assigned to
+		 * @type {string | null}
 		 */
-		this.player = null;
+		this.playerId = null;
+
+		this.colorValue = 0xffffff;
 
 		// Button states
 		this.buttons = 0;
@@ -35,6 +47,12 @@ export default class Controller extends EntityPhysical {
 		// Client-side only(?)
 		if(!scene) { return; }
 
+		/**
+		 * Reference to bulb mesh used for changing LED colors etc.
+		 * @type {THREE.Mesh}
+		 */
+		this.bulb = null;
+		
 		this.initModel();
 		scene.add(this.translateRef);
 	}
@@ -52,7 +70,7 @@ export default class Controller extends EntityPhysical {
 		trigger.position.y = -0.02;
 		trigger.position.z = 0.05;
 		trigger.rotateX(Math.PI / 6);
-		const bulb = new THREE.Mesh(
+		this.bulb = new THREE.Mesh(
 			new THREE.SphereGeometry(0.025),
 			new THREE.MeshStandardMaterial({ color: 0xff44ff })
 		);
@@ -60,7 +78,7 @@ export default class Controller extends EntityPhysical {
 		this.pivotRef = new THREE.Object3D();
 		this.pivotRef.add(stick);
 		this.pivotRef.add(trigger);
-		this.pivotRef.add(bulb);
+		this.pivotRef.add(this.bulb);
 		// Offset for translation
 		this.translateRef = new THREE.Object3D();
 		this.translateRef.add(this.pivotRef);

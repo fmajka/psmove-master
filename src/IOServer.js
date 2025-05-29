@@ -1,5 +1,5 @@
 import { WebSocket, WebSocketServer } from "ws";
-import GameServer from "./GameServer.js";
+import EngineServer from "./EngineServer.js";
 import * as THREE from 'three';
 import Player from "./entities/EntityPlayer.js";
 
@@ -26,8 +26,9 @@ export default class IOServer {
 			console.log(`Client ${clientId} connected`, addr);
 			this.clients.set(addr, ws);
 			// Used for initialization...?
+			EngineServer.refreshControllerList();
 			// TODO: do I even need to do this?
-			// GameServer.state.getEntity(addr, Player);
+			// EngineServer.getEntity(addr, Player);
 
 			ws.on('close', () => {
 				console.log(`Client ${clientId} disconnected`, addr);
@@ -37,15 +38,18 @@ export default class IOServer {
 			ws.on("message", (msg) => {
 				try {
 					const data = JSON.parse(msg.toString());
+
 					if(data.type === "sync_player") {
-						if(!GameServer.state.entities.has(addr)) { return; }
+						if(!EngineServer.getEntity(addr)) { return; }
 						const {x, y, z} = data.position;
-						GameServer.setPlayerPosition(addr, new THREE.Vector3(x, y, z));
-						GameServer.setPlayerRotation(addr, new THREE.Quaternion(...data.quaternion));
+						// TODO: is this stupid?
+						EngineServer.setPlayerPosition(addr, new THREE.Vector3(x, y, z));
+						EngineServer.setPlayerRotation(addr, new THREE.Quaternion(...data.quaternion));
 						IOServer.addSync(addr, "position", "quaternion");
 					}
+
 					else if(data.type === "enter_vr") {
-						const player = GameServer.state.getEntity(addr, Player);
+						const player = EngineServer.getEntity(addr, Player);
 						// TODO: proper Player prop
 						player.vr = true;
 						// const {x, y, z} = data.position;
@@ -54,11 +58,12 @@ export default class IOServer {
 						// TODO: only emit id to the target? Probably no...?
 						this.emit({type: "init", playerId: addr}, ws)
 					}
+
 					else if(data.type === "controller_select") {
 						console.log(data)
-						const controllerId = data.id;
-						GameServer.setPlayerController(addr, controllerId)
+						EngineServer.setPlayerController(addr, data?.id)
 					}
+
 				} catch(err) {
 					console.log("IOServer onmessage error:", err.message);
 				}
@@ -90,7 +95,7 @@ export default class IOServer {
 	// Emits a generic sync message to all clients, should be called after every game tick
 	static emitSync() {
 		// Convert the data structure so that it can be sent via websockets as JSON
-		const entities = GameServer.state.entities;
+		const entities = EngineServer.entities;
 		const sync = Object.fromEntries(
 			[...this.syncCache.entries()].map(([id, set]) => [id, Object.fromEntries([
 				["_t", entities.get(id).constructor.name], // Additionally passes entity's class name

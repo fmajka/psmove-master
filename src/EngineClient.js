@@ -1,37 +1,69 @@
 import * as THREE from 'three';
-import DefaultScene from "./DefaultScene.js";
-import StateClient from "./StateClient.js";
+import { OrbitControls } from "three/examples/jsm/Addons.js";
 import { VRButton } from 'three/addons/webxr/VRButton.js';
+import EntityTypes from './enums/EntityTypes.js';
+import Alpine from 'alpinejs';
+import EngineBase from "./EngineBase.js";
+import DefaultScene from "./DefaultScene.js";
 import UIWindow from './UIWindow.js';
 import IOClient from './IOClient.js';
-import { OrbitControls } from "three/examples/jsm/Addons.js";
-import EntityTypes from './enums/EntityTypes.js';
 
-export default class Engine {
+export default class EngineClient extends EngineBase {
+	/** @type {THREE.Camera} */
 	static camera = null;
+
+	/** @type {OrbitControls} */
 	static controls = null;
+
+	/** @type {DefaultScene} */
 	static scene = null;
+
+	/** @type {THREE.WebGLRenderer} */
 	static renderer = null;
 
 	/**
-	 * @type {StateClient} state
+	 * @type {UIWindow} - displays debug information to the local player
 	 */
-	static state = null;
-
 	static debugWindow = null;
 
+	/**
+	 * @type {number} - time of the last render tick
+	 */
 	static prevTime = null;
 
+	/**
+	 * @type {boolean} - tracks wheather VR enter request was sent to the server
+	 */
 	static isXRInit = false;
+
+	/**
+	 * @type {THREE.Vector3} - untransformed position of the XR camera cached during last render
+	 */
+	static xrPosition = new THREE.Vector3();
+
+	/**
+	 * @type {THREE.Vector3} - untransformed orientation of the XR camera cached during last render
+	 */
+	static xrQuaternion = new THREE.Quaternion();
+
+	/**
+	 * @type {Player} - this client's player object reference
+	 */
+	static localPlayer = null;
+
+	/**
+	 * @type {Controller} - this client's controller object reference
+	 */
+	static localController = null;
 
 	/**
 	 * Sets the client's player object reference to the given player
 	 * @param {Player} player 
 	 */
 	static setLocalPlayer(player) {
-		const prev = this.state.localPlayer;
+		const prev = this.localPlayer;
 		if(prev) { prev.translateRef.visible = true; }
-		this.state.localPlayer = player;
+		this.localPlayer = player;
 		player.translateRef.visible = false;
 		player.cameraRig.add(this.camera);
 		console.log(player)
@@ -53,14 +85,14 @@ export default class Engine {
 		// Loop through entity data
 		for(const [id, entityProps] of Object.entries(data)) {
 			// Create entity if it doesn't exist (using special _t prop)
-			if(!this.state.entities.has(id)) {
+			let entity = this.getEntity(id);
+			if(!entity) {
 				const type = EntityTypes[entityProps._t];
-				this.state.entities.set(id, new type(id, this.scene));
-				console.log(this.state.entities)
+				entity = this.getEntity(id, type, this.scene);
+				console.log(this.entities)
 			}
 			delete entityProps._t;
 			// Sync props
-			const entity = this.state.entities.get(id);
 			for(const [key, value] of Object.entries(entityProps)) {
 				entity.syncProp(key, value);
 			}
@@ -68,7 +100,6 @@ export default class Engine {
 	}
 
 	static init() {
-		this.state = new StateClient();
 		this.scene = new DefaultScene();
 		// Default perspective camera
 		this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 1000);
@@ -104,6 +135,19 @@ export default class Engine {
 			this.camera.updateProjectionMatrix();
 		});
 
+		// Alpine init
+		document.addEventListener('alpine:init', () => {
+			console.log("Alpine init!");
+			// TODO: temp, remove
+			Alpine.store("controllers", [
+				{id: 0, colorValue: 0xff00ff, playerId: "::whatever"},
+				{id: 1, colorValue: 0x00ff00, playerId: null},
+			]);
+			Alpine.store("initXR", this.initXR);
+			Alpine.store("io", IOClient);
+		})
+		Alpine.start();
+
 		// Connect to WebSocket server
 		IOClient.connect(`wss://${window.location.hostname}:3000`);
 
@@ -121,9 +165,15 @@ export default class Engine {
 		const dt = (time - this.prevTime) / 1000; // Time in seconds
 		this.prevTime = time;
 
-		this.state.updateXR(this.getXRCamera());
+		// Cache XR state
+		const xrCamera = this.getXRCamera();
+		xrCamera.getWorldPosition(this.xrPosition);
+  	this.xrQuaternion.copy(xrCamera.quaternion);
+
+		// View update
 		this.scene.update(dt);
 		this.controls.update();
+		this.debugWindow.sprite.visible = this.localPlayer?.calibrationMode;
 		this.debugWindow.setDebugText(...this.getDebugText());
   	this.debugWindow.drawDebugText();
 		this.renderer.render(this.scene, this.camera);
@@ -131,8 +181,8 @@ export default class Engine {
 
 	// TODO: maybe it should be moved somewhere else
 	static getDebugText() {
-		const controller = this.state.localController ?? this.state.entities.get("0");
-		const player = this.state.localPlayer;
+		const controller = this.localController ?? this.entities.get("0");
+		const player = this.localPlayer;
 		const yawFromQuat = (quat) => new THREE.Euler().setFromQuaternion(quat, "YXZ").y;
 		return [
 			controller && ["MovePos", controller.x, controller.y, controller.z],
@@ -147,7 +197,7 @@ export default class Engine {
 			{
 				xrYaw: yawFromQuat(this.getXRCamera().quaternion).toFixed(2) ?? "X", 
 				yawOffset: player ? player.yawOffset : "X", 
-				// xrQuat: this.state.xrQuaternion.toArray().map(v => v.toFixed(2))
+				// xrQuat: this.xrQuaternion.toArray().map(v => v.toFixed(2))
 			},
 		];
 	}

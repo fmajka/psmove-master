@@ -9,7 +9,7 @@ import readline from 'readline';
 import sharp from 'sharp';
 import * as THREE from 'three';
 
-import GameServer from './src/GameServer.js';
+import EngineServer from './src/EngineServer.js';
 import IOServer from './src/IOServer.js';
 import PSMove from './src/enums/PSMove.js';
 import Controller from './src/entities/EntityController.js';
@@ -105,8 +105,9 @@ async function startServer() {
   * @param {Controller} controller
   */
   const processButtons = (controller) => {
-    const player = GameServer.getFirstVRPlayer();
-    // if(doPrint) console.log("First vr player", !!player);
+    // const player = EngineServer.getFirstVRPlayer();
+    const player = EngineServer.getEntity(controller.playerId);
+    // if(doPrint) console.log("Controller", controller.id, "matches player", player?.id, controller.playerId);
     if(!player) { return; }
     IOServer.addSync(player.id, "position");
     const justPressed = (btn) => controller.buttons & controller.changed & btn;
@@ -126,25 +127,23 @@ async function startServer() {
         controller.physicalScale += scaleMod;
         IOServer.addSync(controller.id, "physicalScale");
       }
-      // Calibrate position and rotation
-      if(justPressed(PSMove.Btn_SELECT)) {
-        resetYaw(player, controller, false);
-        console.log("Soft reset!")
-      }
-      if(controller.timePressed[PSMove.Btn_SELECT] > 1.0 && !controller.hardResetProcessed) {
-        resetYaw(player, controller, true);
-        controller.hardResetProcessed = true;
-        console.log("Hard reset!")
-      }
-      if(justReleased(PSMove.Btn_SELECT)) {
-        controller.hardResetProcessed = false;
-        console.log("hardResetProcessed set to", controller.hardResetProcessed)
-      }
+    }
+    // Calibrate position and rotation
+    if(justPressed(PSMove.Btn_SELECT)) {
+      resetYaw(player, controller, false);
+      console.log("Soft reset!")
+    }
+    if(controller.timePressed[PSMove.Btn_SELECT] > 1.0 && !controller.hardResetProcessed) {
+      resetYaw(player, controller, true);
+      controller.hardResetProcessed = true;
+      console.log("Hard reset!")
+    }
+    if(justReleased(PSMove.Btn_SELECT)) {
+      controller.hardResetProcessed = false;
+      console.log("hardResetProcessed set to", controller.hardResetProcessed)
     }
     // Normal inputs
-    else {
-      player.isMoving = controller.buttons & PSMove.Btn_MOVE;
-    }
+    player.isMoving = controller.buttons & PSMove.Btn_MOVE;
   }
 
   // WORLD
@@ -172,6 +171,7 @@ async function startServer() {
       const i = Math.floor(u * (info.width - 1));
       const j = Math.floor(v * (info.height - 1));
 
+      // TODO: interpolate
       const heightNorm = data[j * info.width + i] / 255;
       return (heightNorm || 0.5) * DISPLACEMENT_SCALE;
     };
@@ -184,15 +184,15 @@ async function startServer() {
     // TODO: proper delta time xd
     const dt = 1 / 30;
     // Player movement
-    for(const playerId of IOServer.getActiveClientIDs()) {
-      if(!GameServer.state.entities.has(playerId)) { continue; }
+    for(const clientId of IOServer.getActiveClientIDs()) {
+      const player = EngineServer.getEntity(clientId);
+      if(!player) { continue; }
       /**
        * @type {Player} player
        */
-      const player = GameServer.state.getEntity(playerId);
       if(player.isMoving) {
         const yaw = yawFromQuat(player.quaternion);
-        // TODO: player speed (1m/s?)
+        // TODO: Why does he have to move backwards?
         const moveDelta = -3 * dt; 
         const x = player.offsetPosition.x + Math.sin(yaw) * moveDelta;
         const z = player.offsetPosition.z + Math.cos(yaw) * moveDelta;
@@ -202,7 +202,7 @@ async function startServer() {
         console.log(player.position)
         IOServer.addSync(player.id, "position", "offsetPosition");
         // TODO: need to assign a controller to a player
-        const controller = GameServer.state.getEntity(0, Controller);
+        const controller = EngineServer.getEntity(0, Controller);
         controller.updatePosition(player.offsetPosition);
         IOServer.addSync(controller.id, "position");
       }
@@ -217,26 +217,27 @@ async function startServer() {
   }, 1000 / 30);
   
   // Process line of PSMOVE data
-  let prevTime = null;
   rl.on('line', (line) => {
     const time = performance.now() / 1000;
-    const dt = prevTime ? time - prevTime : 0.0;
-    prevTime = time;
 
     // TODO: multiple controller data in one line, separated by ';'?
     const data = line.split(" ");
     const type = data[0];
     if(type === "move_update") {
-      // if(doPrint) { console.log(line); }
+      if(doPrint) { console.log(line); }
+      // console.log(line);
       // Convert data array to object with named properties
       const msg = {};
-      ["type", "id", "x", "y", "z", "qw", "qx", "qy", "qz", "buttons", "trigger", "colorId"]
+      ["type", "id", "x", "y", "z", "qw", "qx", "qy", "qz", "buttons", "trigger", "colorValue"]
         .forEach((key, i) => msg[key] = (key === "type") ? data[i] : Number(data[i]));
       // Update server-side controller
-      const controller = GameServer.state.getEntity(msg.id, Controller);
+      const controller = EngineServer.getEntity(msg.id, Controller);
+      // TODO: timestamp server-side controller property
+      const dt = controller.timestamp ? time - controller.timestamp : 0.0;
+      controller.timestamp = time;
       // TODO: better controller access
-      if(!GameServer.controllerCache.has(controller)) {
-        GameServer.controllerCache.add(controller);
+      if(!EngineServer.controllerCache.has(controller)) {
+        EngineServer.controllerCache.add(controller);
       }
       const changed = controller.buttons ^ msg.buttons;
       controller.physicalPosition.set(msg.x / 100, msg.y / 100, msg.z / 100);
@@ -246,14 +247,14 @@ async function startServer() {
       controller.buttons = msg.buttons;
       controller.changed = changed;
       // TODO: proper color handling
-      controller.colorId = msg.colorId;
+      controller.colorValue = msg.colorValue;
       // if(doPrint) { console.log(controller.color) }
       // Track time pressed
       const btnTime = controller.timePressed;
       for(const buttonValue of Object.values(PSMove)) {
         btnTime[buttonValue] = (controller.buttons & buttonValue) ? (btnTime[buttonValue] ?? 0) + dt : 0;
       }
-      IOServer.addSync(controller.id, "position", "quaternion", "buttons", "changed", "colorId");
+      IOServer.addSync(controller.id, "position", "quaternion", "buttons", "changed", "colorValue");
       processButtons(controller);
       // Print once a second debug
       if(doPrint) { doPrint = false; setTimeout(() => doPrint = true, 1000); }

@@ -49,7 +49,9 @@ export default class EntityPhysical extends Entity {
 		this.yawOffset = 0.0;
 
 		// Client-side
+		/** @type {THREE.Object3D} */
 		this.pivotRef = null;
+		/** @type {THREE.Object3D} */
 		this.translateRef = null;
 	}
 

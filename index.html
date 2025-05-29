@@ -9,29 +9,61 @@
   </head>
   <body>
     <script type="module" src="/src/main.js" defer></script>
-    <script>
-      window.controllers = [
-        {id: 0, colorId: 0, playerId: "::whatever"},
-        {id: 1, colorId: 4, playerId: null},
-        {id: 2, colorId: 4, playerId: null},
-      ]
-    </script>
-    <!-- <script type="module" src="/src/ws.js"></script> -->
+    <style>
+      .ui-wrapper {
+        margin: 0.5rem;
+        position: absolute;
+      }
+      .controller-list {
+        align-items: stretch;
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+      }
+      .controller-list-element {
+        background-color: rgba(0.25, 0.25, 0.25, 0.25);
+        border-radius: 4px;
+        display: flex;
+        gap: 1rem;
+        padding: 1rem;
+      }
+      .controller-led {
+        align-items: center;
+        aspect-ratio: 1;
+        border-radius: 50%;
+        color: #fff;
+        display: flex;
+        font-size: 2.5rem;
+        font-weight: bold;
+        justify-content: center;
+        width: 3rem;
+        -webkit-text-stroke: 1px black;
+      }
+    </style>
      
-    <div x-data="{ open: false }" style="position: absolute; display: flex; flex-direction: column; align-items: start;">
-      <template x-for="controller in window.controllers">
-        <div>
-          <h2 x-text="controller.id"></h2>
-          <!-- <p>
-            Color: <span x-text="controller.colorId"></span>
-          </p> -->
-          <button x-on:click="window._io.send({type: 'controller_select', id: controller.id})">
-            <!-- Owner: <span x-text="controller.playerId"></span> -->
-            WYBIERZ MNIE
-          </button>
-        </div>
-      </template>
-    </div>
+    <div x-data class="ui-wrapper">
+      <button x-on:click="$store.initXR()" style="margin-bottom: 1rem;">Emulate Enter VR</button>
 
+      <div class="controller-list">
+        <template x-for="controller in $store.controllers">
+          <div class="controller-list-element">
+            <div class="controller-led" x-bind:style="`background: #${controller.colorValue.toString(16).padStart(6, '0')}`">
+              <span x-text="controller.id"></span>
+            </div>
+            <template x-if="!controller.playerId">
+              <button x-on:click="$store.io.send({type: 'controller_select', id: controller.id})">
+                WYBIERZ MNIE!
+              </button>
+            </template>
+            <template x-if="controller.playerId">
+              <button disabled>
+                <span x-text="controller.playerId"></span>
+              </button>
+            </template>
+          </div>
+        </template>
+      </div>
+    </div>
+    
   </body>
 </html>
