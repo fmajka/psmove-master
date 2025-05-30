@@ -88,10 +88,10 @@ export default class Controller extends EntityPhysical {
 	 * Additionally multiplies the physical position by the scale
 	 * @override
 	 */
-	updatePosition(offsetArg) {
-		this.position.copy(this.physicalPosition).multiplyScalar(this.physicalScale).add(this.offsetPosition)
-		if(offsetArg) {
-			this.position.add(offsetArg);
+	updatePosition(playerPosition) {
+		this.position.copy(this.physicalPosition).multiplyScalar(this.physicalScale).add(this.offsetPosition);
+		if(playerPosition) {
+			this.position.add(playerPosition);
 		}
 	}
 }

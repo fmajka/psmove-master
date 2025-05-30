@@ -55,11 +55,12 @@ export default class Player extends EntityPhysical {
 	initModel(scene) {
 		const character = this.translateRef = new THREE.Object3D();
 		// Torso
-		const torsoHeight = 1.25;
-		const geometry = new THREE.CylinderGeometry( 0.15, 0.5, torsoHeight, 16 ); 
+		const torsoHeight = 1.65;
+		const geometry = new THREE.CylinderGeometry( 0.09, 0.36, torsoHeight, 16 ); 
 		const material = new THREE.MeshStandardMaterial( {color: 0xbbbbbb} ); 
 		const cylinder = new THREE.Mesh( geometry, material ); 
-		cylinder.position.y = torsoHeight / 2;
+		// cylinder.position.y = torsoHeight / 2;
+		cylinder.position.y = (-0.45) * torsoHeight;
 		character.add(cylinder);
 		// Head
 		const headMaterialPlain = new THREE.MeshStandardMaterial({ color: 0xdddddd });
@@ -73,12 +74,12 @@ export default class Player extends EntityPhysical {
 			headMaterialDark,  // back
 			headMaterialTexture, // front
 		];
-		const headSize = 0.5;
+		const headSize = 0.3;
 		const headGeometry = new THREE.BoxGeometry(headSize, headSize, headSize);
 		const headMesh = new THREE.Mesh(headGeometry, headMaterials);
 		headMesh.position.y = headSize / 2;
 		const headPivot = this.pivotRef = new THREE.Object3D();
-		headPivot.position.y =  0.9 * torsoHeight;
+		// headPivot.position.y =  0.9 * torsoHeight;
 		headPivot.add(headMesh);
 		character.add(headPivot);
 		return character;

@@ -1,9 +1,14 @@
 import * as THREE from 'three';
 import IOServer from './IOServer.js';
 import EngineBase from './EngineBase.js';
+import Controller from './entities/EntityController.js';
+import Player from './entities/EntityPlayer.js';
 
 export default class EngineServer extends EngineBase {
-	// Stores all existing controller ids
+	/**
+	 * Stores all existing controller references
+	 * @type {Set<Controller}
+	 */
 	static controllerCache = new Set();
 
 	/**
@@ -19,9 +24,12 @@ export default class EngineServer extends EngineBase {
 	}
 
 	static setPlayerPosition(id, vector) {
+		/** @type {Player} */
 		const player = this.entities.get(id);
 		if(!player) { return; }
 		// TODO: does it really do anything?
+		player.physicalPosition.set(0, vector.y, 0);
+		player.updatePosition();
 		// player.position.copy(vector).add(player.offsetPosition);
 	}
 
@@ -61,6 +69,16 @@ export default class EngineServer extends EngineBase {
 		console.log("EngineServer.setPlayerController: assigned player", playerId, "to controller", controllerId);
 		// Send updated controller list to clients
 		this.refreshControllerList();
+	}
+
+	/**
+	 * 
+	 * @param {Controller} controller 
+	 * @returns {Player}
+	 */
+	static getControllerAssignedPlayer(controller) {
+		if(!controller.playerId) { return null; }
+		return this.getEntity(controller.playerId);
 	}
 
 	// TODO: it's only temporary

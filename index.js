@@ -90,9 +90,9 @@ async function startServer() {
       const faceOffset = new THREE.Vector3(Math.sin(targetYaw) * faceDistance, 0, Math.cos(targetYaw) * faceDistance);
       // Add to controller offset to place the controller in front of the player's face
       const targetPos = player.position.clone().add(faceOffset);
-      const movePos = controller.physicalPosition.clone().multiplyScalar(controller.physicalScale);
+      const movePos = controller.physicalPosition.clone().multiplyScalar(controller.physicalScale).add(player.position);
       controller.offsetPosition.copy(targetPos.sub(movePos));
-      controller.updatePosition();
+      controller.updatePosition(player.position);
       // Sync with clients
       IOServer.addSync(controller.id, "position");
     }
@@ -166,7 +166,7 @@ async function startServer() {
       .raw()
       .toBuffer({ resolveWithObject: true });
 
-    return (x, z) => {
+    const heightAt = (x, z) => {
       const { u, v } = worldToUV(x, z);
       const i = Math.floor(u * (info.width - 1));
       const j = Math.floor(v * (info.height - 1));
@@ -175,21 +175,36 @@ async function startServer() {
       const heightNorm = data[j * info.width + i] / 255;
       return (heightNorm || 0.5) * DISPLACEMENT_SCALE;
     };
+
+    const blerp = (x1, y1, x2, y2, x, y) => {
+      let a = (((x2 - x) * (y2 - y)) / ((x2 - x1) * (y2 - y1))) * heightAt(x1, y1)
+      let b = (((x - x1) * (y2 - y)) / ((x2 - x1) * (y2 - y1))) * heightAt(x2, y1)
+      let c = (((x2 - x) * (y - y1)) / ((x2 - x1) * (y2 - y1))) * heightAt(x1, y2)
+      let d = (((x - x1) * (y - y1)) / ((x2 - x1) * (y2 - y1))) * heightAt(x2, y2)
+      return a + b + c + d;
+    }
+
+    return (x, z) => {
+      const fx = Math.floor(x), fz = Math.floor(z)
+      return blerp(fx, fz, fx+1 ,fz+1, x, z)
+    }
   }
 
   const getWorldHeight = await loadHeightMap("./public/heightmap.png");
 
   // Game tick, 30 per second
+  const tickrate = 1 / 50;
   setInterval(() => {
     // TODO: proper delta time xd
-    const dt = 1 / 30;
+    const dt = tickrate;
     // Player movement
-    for(const clientId of IOServer.getActiveClientIDs()) {
-      const player = EngineServer.getEntity(clientId);
-      if(!player) { continue; }
+    for(const controller of EngineServer.controllerCache.values()) {
       /**
-       * @type {Player} player
+       * @type {Player} - player who the controller belongs to
        */
+      const player = EngineServer.getEntity(controller.playerId);
+      if(!player) { continue; }
+      // Player movement
       if(player.isMoving) {
         const yaw = yawFromQuat(player.quaternion);
         // TODO: Why does he have to move backwards?
@@ -201,12 +216,17 @@ async function startServer() {
         player.updatePosition();
         console.log(player.position)
         IOServer.addSync(player.id, "position", "offsetPosition");
-        // TODO: need to assign a controller to a player
-        const controller = EngineServer.getEntity(0, Controller);
-        controller.updatePosition(player.offsetPosition);
+        controller.updatePosition(player.position);
         IOServer.addSync(controller.id, "position");
       }
     }
+
+    // for(const clientId of IOServer.getActiveClientIDs()) {
+    //   const player = EngineServer.getEntity(clientId);
+    //   if(!player) { continue; }
+      
+    // }
+
     // Movement tick
     // const height = getWorldHeight(x, z);
     // console.log(`Height at (${x}, ${z}) is approximately ${height.toFixed(2)}`);
@@ -214,7 +234,7 @@ async function startServer() {
     // z += (Math.random() - 0.5) * 2;
     // Sync data with clients
     IOServer.emitSync();
-  }, 1000 / 30);
+  }, 1000 * tickrate);
   
   // Process line of PSMOVE data
   rl.on('line', (line) => {
@@ -240,8 +260,9 @@ async function startServer() {
         EngineServer.controllerCache.add(controller);
       }
       const changed = controller.buttons ^ msg.buttons;
+      const player = EngineServer.getControllerAssignedPlayer(controller);
       controller.physicalPosition.set(msg.x / 100, msg.y / 100, msg.z / 100);
-      controller.updatePosition();
+      controller.updatePosition(player?.position);
       controller.physicalQuaternion.set(msg.qx, msg.qy, msg.qz, msg.qw);
       controller.updateQuaternion();
       controller.buttons = msg.buttons;
