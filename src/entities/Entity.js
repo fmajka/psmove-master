@@ -3,14 +3,32 @@ import * as THREE from 'three';
 export default class Entity {
 
 	static setters = {
-		position: (_, value) => {
+		position: (entity, value) => {
 			const {x, y, z} = value; 
+			entity.modelRef?.position.set(x, y, z);
 			return new THREE.Vector3(x, y ,z);
 		},
-		quaternion: (_, value) => new THREE.Quaternion(...value),
+		quaternion: (entity, value) => {
+			const quat = new THREE.Quaternion(...value);
+			entity.modelRef.quaternion.copy(quat);
+			return quat;
+		},
+		/**
+		 * Removes entity model from the scene if DEAD
+		 * @param {Entity} entity 
+		 * @param {Number} value 
+		 */
+		life: (entity, value) => {
+			if(!entity.modelRef) { return value }
+			entity.modelRef.material.opacity = value;
+			if(value <= 0 && entity.scene) {
+				entity.scene.remove(entity.modelRef);
+			}
+			return value;
+		}
 	}
 
-	constructor(id) {
+	constructor(id, scene) {
 		this.id = id;
 
 		/**
@@ -24,6 +42,15 @@ export default class Entity {
 		 * @type {THREE.Quaternion}
 		 */
 		this.quaternion = new THREE.Quaternion();
+
+		/** Reference to the mesh */
+		this.modelRef = null;
+
+		/**
+		 * Reference to the scene 
+		 * @type {THREE.Scene}
+		 * */
+		this.scene = scene;
 	}
 
 	/**

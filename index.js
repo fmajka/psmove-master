@@ -128,6 +128,17 @@ async function startServer() {
         IOServer.addSync(controller.id, "physicalScale");
       }
     }
+    else {
+      if(justPressed(PSMove.Btn_T)) {
+        EngineServer.controllerShootProjectile(controller);
+      }
+      if(justPressed(PSMove.Btn_CIRCLE)) {
+        EngineServer.spawnEnemy();
+      }
+      if(justPressed(PSMove.Btn_TRIANGLE)) {
+        EngineServer.spawnParticles(controller.position, controller.colorValue);
+      }
+    }
     // Calibrate position and rotation
     if(justPressed(PSMove.Btn_SELECT)) {
       resetYaw(player, controller, false);
@@ -220,6 +231,8 @@ async function startServer() {
         IOServer.addSync(controller.id, "position");
       }
     }
+
+    EngineServer.update(dt);
 
     // for(const clientId of IOServer.getActiveClientIDs()) {
     //   const player = EngineServer.getEntity(clientId);

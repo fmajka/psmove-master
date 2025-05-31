@@ -14,15 +14,24 @@ export default class DefaultScene extends THREE.Scene {
 		// Just a torus
 		this.torus = null;
 
-		this.initTextures({
+		// Texture map for easy creation
+		const textureMap = {
 			admixon: "/admixon_face.jpg"
-		});
+		}
+		// Fairy textures
+		for(let i = 1; i <= 4; i++) {
+			textureMap[`fairy${i}`] = `/fairy${i}.png`
+		}
+
+		this.initTextures(textureMap);
 		this.initGraphics();
 	}
 
 	initTextures(textureMap) {
 		for(const [name, path] of Object.entries(textureMap)) {
-			this.textures[name] = this.textureLoader.load(path);
+			this.textures[name] = this.textureLoader.load(path, () => console.log('Texture loaded successfully'),
+  undefined,
+  (err) => console.error('Error loading texture:', err));
 		}
 	}
 
