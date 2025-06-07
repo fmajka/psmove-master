@@ -15,8 +15,12 @@ export default class EntityPhysical extends Entity {
 		},
 	}
 
-	constructor(id) {
-		super(id);
+	// Client-side
+	/** @type {THREE.Object3D} pivotRef */
+	/** @type {THREE.Object3D} translateRef */
+
+	constructor(id, scene) {
+		super(id, scene);
 
 		/**
 		 * The physical object's position captured by internal/external sensors
@@ -40,19 +44,13 @@ export default class EntityPhysical extends Entity {
 		 * Quaternion offset for adjusting drift
 		 * @type {THREE.Quaternion}
 		 */
-		this.offsetQuaternion = new THREE.Quaternion();
+		// this.offsetQuaternion = new THREE.Quaternion();
 
 		/**
 		 * Offset used for adjusting controller/player camera drift
 		 * @type {Number}
 		 */
 		this.yawOffset = 0.0;
-
-		// Client-side
-		/** @type {THREE.Object3D} */
-		this.pivotRef = null;
-		/** @type {THREE.Object3D} */
-		this.translateRef = null;
 	}
 
 	/**

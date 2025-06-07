@@ -43,6 +43,7 @@
      
     <div x-data class="ui-wrapper">
       <button x-on:click="$store.initXR()" style="margin-bottom: 1rem;">Emulate Enter VR</button>
+      <button x-on:click="$store.io.send({type: 'test_yaw', seconds: '20'})" style="margin-bottom: 1rem;">Test yaw drift</button>
 
       <div class="controller-list">
         <template x-for="controller in $store.controllers">

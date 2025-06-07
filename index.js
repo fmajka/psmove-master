@@ -14,6 +14,7 @@ import IOServer from './src/IOServer.js';
 import PSMove from './src/enums/PSMove.js';
 import Controller from './src/entities/EntityController.js';
 import Player from './src/entities/EntityPlayer.js';
+import EntityDoodad from './src/entities/EntityDoodad.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -63,7 +64,7 @@ async function startServer() {
   /**
   * @param {Player} player
   * @param {Controller} controller
-  * @param {Boolean} hardReset - Sets camera yaw to controller yaw when false, resets yaw of both to 0 when true
+  * @param {Boolean} hardReset - Sets camera yaw to 0 when false, sets controller yaw to 0 when true
   */
   const resetYaw = (player, controller, hardReset = false) => { 
     const vectorForward = new THREE.Vector3(0, 0, -1);
@@ -76,11 +77,17 @@ async function startServer() {
     if(Math.abs(dotUp) <= horizontalRange) {
       const targetYaw = 0; //hardReset ? 0 : yawFromQuat(controller.quaternion);
       console.log(`Reset yaw, up: ${dotUp.toFixed(2)}`);
-      const playerYaw = yawFromQuat(player.physicalQuaternion);
-      player.yawOffset = targetYaw - playerYaw;
-      player.updateQuaternion();
-      console.log(`${player.yawOffset} = ${targetYaw} - ${playerYaw}`, player.quaternion.toArray().map(v => v.toFixed(2)));
-      IOServer.addSync(player.id, "quaternion", "yawOffset");
+      const entity = hardReset ? controller : player;
+      const entityYaw = yawFromQuat(entity.physicalQuaternion);
+      entity.yawOffset = targetYaw - entityYaw;
+      entity.updateQuaternion();
+      console.log(`(hardReset=${hardReset}): ${entity.yawOffset} = ${targetYaw} - ${entityYaw}`, entity.quaternion.toArray().map(v => v.toFixed(2)));
+      if(hardReset) {
+        IOServer.addSync(controller.id, "quaternion");
+      }
+      else {
+        IOServer.addSync(player.id, "quaternion", "yawOffset");
+      }
     }
     // Reset position
     else if(dotUp >= verticalThreshold) {
@@ -101,11 +108,11 @@ async function startServer() {
     }
   }
 
+  let yawLog = 0;
   /**
   * @param {Controller} controller
   */
   const processButtons = (controller) => {
-    // const player = EngineServer.getFirstVRPlayer();
     const player = EngineServer.getEntity(controller.playerId);
     // if(doPrint) console.log("Controller", controller.id, "matches player", player?.id, controller.playerId);
     if(!player) { return; }
@@ -127,6 +134,10 @@ async function startServer() {
         controller.physicalScale += scaleMod;
         IOServer.addSync(controller.id, "physicalScale");
       }
+      // Log
+      if(justPressed(PSMove.Btn_T)) {
+        console.log(`Yaw (${yawLog++}):`, yawFromQuat(controller.quaternion) * 180 / Math.PI);
+      }
     }
     else {
       if(justPressed(PSMove.Btn_T)) {
@@ -144,7 +155,7 @@ async function startServer() {
       resetYaw(player, controller, false);
       console.log("Soft reset!")
     }
-    if(controller.timePressed[PSMove.Btn_SELECT] > 1.0 && !controller.hardResetProcessed) {
+    if(controller.timePressed[PSMove.Btn_SELECT] > 0.75 && !controller.hardResetProcessed) {
       resetYaw(player, controller, true);
       controller.hardResetProcessed = true;
       console.log("Hard reset!")
@@ -181,27 +192,47 @@ async function startServer() {
       const { u, v } = worldToUV(x, z);
       const i = Math.floor(u * (info.width - 1));
       const j = Math.floor(v * (info.height - 1));
-
-      // TODO: interpolate
       const heightNorm = data[j * info.width + i] / 255;
       return (heightNorm || 0.5) * DISPLACEMENT_SCALE;
     };
 
     const blerp = (x1, y1, x2, y2, x, y) => {
-      let a = (((x2 - x) * (y2 - y)) / ((x2 - x1) * (y2 - y1))) * heightAt(x1, y1)
-      let b = (((x - x1) * (y2 - y)) / ((x2 - x1) * (y2 - y1))) * heightAt(x2, y1)
-      let c = (((x2 - x) * (y - y1)) / ((x2 - x1) * (y2 - y1))) * heightAt(x1, y2)
-      let d = (((x - x1) * (y - y1)) / ((x2 - x1) * (y2 - y1))) * heightAt(x2, y2)
-      return a + b + c + d;
+      return (((x2 - x) * (y2 - y)) / ((x2 - x1) * (y2 - y1))) * heightAt(x1, y1)
+      + (((x - x1) * (y2 - y)) / ((x2 - x1) * (y2 - y1))) * heightAt(x2, y1)
+      + (((x2 - x) * (y - y1)) / ((x2 - x1) * (y2 - y1))) * heightAt(x1, y2)
+      + (((x - x1) * (y - y1)) / ((x2 - x1) * (y2 - y1))) * heightAt(x2, y2);
     }
 
     return (x, z) => {
-      const fx = Math.floor(x), fz = Math.floor(z)
-      return blerp(fx, fz, fx+1 ,fz+1, x, z)
+      const flx = Math.floor(x)
+      const flz = Math.floor(z);
+      return blerp(flx, flz, flx + 1, flz + 1, x, z);
     }
   }
 
-  const getWorldHeight = await loadHeightMap("./public/heightmap.png");
+  const getWorldHeight = EngineServer.getWorldHeight = await loadHeightMap("./public/heightmap.png");
+
+  // TODO: init doodads
+
+  const spawnDoodads = () => {
+    const path =  `/models/LowPolyNature_v1.0/FBX`;
+    for(let i = 0; i < 150; i++) {
+      const doodad = EngineServer.getEntity(EngineServer.nextId++, EntityDoodad);
+      const x = (Math.random() - 0.5) * PLANE_SIZE; 
+      const z = (Math.random() - 0.5) * PLANE_SIZE;
+      doodad.position.set(
+        x,
+        getWorldHeight(x, z),
+        z,
+      );
+      const model = (Math.random() < 0.1) ? `FlowerA.fbx` : `Grass${1 + Math.floor(Math.random() * 4)}.fbx`;
+      doodad.modelPath = `${path}/${model}`
+      doodad.modelScale = 0.01 * (0.5 + Math.random() * 0.5);
+      IOServer.addSync(doodad.id, "position", "modelPath", "modelScale");
+      console.log("Doodad spawned at", x, doodad.position.y, z);
+    }
+  }
+    setTimeout(spawnDoodads, 3500);
 
   // Game tick, 30 per second
   const tickrate = 1 / 50;
@@ -225,7 +256,7 @@ async function startServer() {
         const y = getWorldHeight(x, z);
         player.offsetPosition.set(x, y, z);
         player.updatePosition();
-        console.log(player.position)
+        // console.log(player.position)
         IOServer.addSync(player.id, "position", "offsetPosition");
         controller.updatePosition(player.position);
         IOServer.addSync(controller.id, "position");
@@ -257,7 +288,7 @@ async function startServer() {
     const data = line.split(" ");
     const type = data[0];
     if(type === "move_update") {
-      if(doPrint) { console.log(line); }
+      // if(doPrint) { console.log(line); }
       // console.log(line);
       // Convert data array to object with named properties
       const msg = {};
@@ -275,7 +306,11 @@ async function startServer() {
       const changed = controller.buttons ^ msg.buttons;
       const player = EngineServer.getControllerAssignedPlayer(controller);
       controller.physicalPosition.set(msg.x / 100, msg.y / 100, msg.z / 100);
+      // Update position history buffer
+      controller.positionHistory.push(controller.position.clone());
+      if(controller.positionHistory.length > 10) { controller.positionHistory.shift(); }
       controller.updatePosition(player?.position);
+      // Update quaternion buffer
       controller.physicalQuaternion.set(msg.qx, msg.qy, msg.qz, msg.qw);
       controller.updateQuaternion();
       controller.buttons = msg.buttons;
@@ -294,7 +329,7 @@ async function startServer() {
       if(doPrint) { doPrint = false; setTimeout(() => doPrint = true, 1000); }
     }
     else {
-      console.log(`Received a different type of message: ${type}`, line);
+      // console.log(`Received a different type of message: ${type}`, line);
     }
   });
   

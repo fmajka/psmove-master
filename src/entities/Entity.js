@@ -1,28 +1,44 @@
 import * as THREE from 'three';
+import DefaultScene from '../DefaultScene.js';
 
 export default class Entity {
 
+	/**
+	 * @callback Setter
+	 * @param {Entity} entity - The entity instance.
+	 * @param {*} value - The value to handle.
+	 * @returns {*}
+	 *
+	 * @type {Object<string, Setter>}
+	 */
 	static setters = {
 		position: (entity, value) => {
 			const {x, y, z} = value; 
-			entity.modelRef?.position.set(x, y, z);
+			entity.meshRef?.position.set(x, y, z);
 			return new THREE.Vector3(x, y ,z);
 		},
 		quaternion: (entity, value) => {
 			const quat = new THREE.Quaternion(...value);
-			entity.modelRef.quaternion.copy(quat);
+			entity.meshRef?.quaternion.copy(quat);
 			return quat;
 		},
 		/**
+		 * Change mesh color
+		 * @param {Number} value
+		 */
+		colorValue: (entity, value) => {
+			entity.meshRef?.material.color.setHex(value);
+			return value;
+		},
+		/**
 		 * Removes entity model from the scene if DEAD
-		 * @param {Entity} entity 
 		 * @param {Number} value 
 		 */
 		life: (entity, value) => {
-			if(!entity.modelRef) { return value }
-			entity.modelRef.material.opacity = value;
+			if(!entity.meshRef) { return value }
+			entity.meshRef.material.opacity = value;
 			if(value <= 0 && entity.scene) {
-				entity.scene.remove(entity.modelRef);
+				entity.scene.remove(entity.meshRef);
 			}
 			return value;
 		}
@@ -30,6 +46,12 @@ export default class Entity {
 
 	constructor(id, scene) {
 		this.id = id;
+
+		/**
+		 * Reference to the scene 
+		 * @type {DefaultScene}
+		 * */
+		this.scene = scene || null;
 
 		/**
 		 * The entity's in-game position
@@ -43,14 +65,22 @@ export default class Entity {
 		 */
 		this.quaternion = new THREE.Quaternion();
 
-		/** Reference to the mesh */
-		this.modelRef = null;
+		this.life = 1.0;
 
-		/**
-		 * Reference to the scene 
-		 * @type {THREE.Scene}
-		 * */
-		this.scene = scene;
+		/** Reference to the mesh */
+		this.meshRef = null;
+
+		if(scene) {
+			this.initMesh();
+		}
+	}
+
+	/**
+	 * Initializes the entity's client-side model
+	 * @abstract
+	 */
+	initMesh() {
+		console.warn(`${this.constructor.name}: initMesh() is abstract!`);
 	}
 
 	/**

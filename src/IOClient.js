@@ -65,6 +65,15 @@ export default class IOClient {
 				// TODO: shouldn't have to pass scene here(?)
 				const player = Engine.getEntity(data.playerId, Player, Engine.scene);
 				Engine.setLocalPlayer(player);
+				// TODO: it shouldn't look like that
+				const controllers = Alpine.store("controllers");
+				
+				for(const controller of controllers) {
+					if(controller.playerId === player.id) {
+						Engine.localControllerId = controller.id
+						break;
+					}
+				}
 				console.log("init", data)
 			}
 

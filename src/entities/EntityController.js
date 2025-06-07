@@ -19,7 +19,7 @@ export default class Controller extends EntityPhysical {
 	 * @param {Number} id - ID (array index) of the controller
 	 */
 	constructor(id, scene) {
-		super(id);
+		super(id, scene);
 
 		/**
 		 * Scales the controller's physical position from PSMS to better match reality
@@ -41,23 +41,14 @@ export default class Controller extends EntityPhysical {
 		this.timePressed = {};
 		this.trigger = 0;
 
+		// TODO: tracking data history for throwing
+		this.positionHistory = [];
+
 		// Upon holding the select button for at least one second, a hard reset request is sent
 		this.hardResetProcessed = false;
-		
-		// Client-side only(?)
-		if(!scene) { return; }
-
-		/**
-		 * Reference to bulb mesh used for changing LED colors etc.
-		 * @type {THREE.Mesh}
-		 */
-		this.bulb = null;
-		
-		this.initModel();
-		scene.add(this.translateRef);
 	}
 
-	initModel() {
+	initMesh() {
 		const stick = new THREE.Mesh(
 			new THREE.BoxGeometry(0.04, 0.04, 0.14),
 			new THREE.MeshStandardMaterial({ color: 0x222222 })
@@ -70,9 +61,13 @@ export default class Controller extends EntityPhysical {
 		trigger.position.y = -0.02;
 		trigger.position.z = 0.05;
 		trigger.rotateX(Math.PI / 6);
+		/**
+		 * Reference to bulb mesh used for changing LED colors etc.
+		 * @type {THREE.Mesh}
+		 */
 		this.bulb = new THREE.Mesh(
 			new THREE.SphereGeometry(0.025),
-			new THREE.MeshStandardMaterial({ color: 0xff44ff })
+			new THREE.MeshStandardMaterial({ color: 0xdddddd })
 		);
 		// Pivot for rotation
 		this.pivotRef = new THREE.Object3D();
@@ -80,8 +75,9 @@ export default class Controller extends EntityPhysical {
 		this.pivotRef.add(trigger);
 		this.pivotRef.add(this.bulb);
 		// Offset for translation
-		this.translateRef = new THREE.Object3D();
+		this.translateRef = this.meshRef = new THREE.Object3D();
 		this.translateRef.add(this.pivotRef);
+		this.scene.add(this.translateRef);
 	}
 
 	/**

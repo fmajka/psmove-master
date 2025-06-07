@@ -4,6 +4,7 @@ import Controller from "../entities/EntityController.js"
 import EntityParticle from "../entities/EntityParticle.js"
 import EntityProjectile from "../entities/EntityProjectile.js"
 import EntityEnemy from "../entities/EntityEnemy.js"
+import EntityDoodad from "../entities/EntityDoodad.js"
 
 const EntityTypes = {
 	[Entity.name]: Entity,
@@ -12,6 +13,7 @@ const EntityTypes = {
 	[EntityEnemy.name]: EntityEnemy,
 	[EntityParticle.name]: EntityParticle,
 	[EntityProjectile.name]: EntityProjectile,
+	[EntityDoodad.name]: EntityDoodad,
 }
 
 export default EntityTypes;

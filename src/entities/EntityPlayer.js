@@ -24,7 +24,7 @@ export default class Player extends EntityPhysical {
 	 * @param {string} id - Identifier of the player should be their websocket IP address
 	 */
 	constructor(id, scene) {
-		super(id);
+		super(id, scene);
 
 		// Controller assigned to the player
 		// this.controller = null;
@@ -45,15 +45,11 @@ export default class Player extends EntityPhysical {
 		this.isMoving = false;
 
 		// Client-side only
-		if(scene) {
-			this.initModel(scene);
-			scene.add(this.cameraRig);
-			scene.add(this.translateRef);
-		}
+		scene?.add(this.cameraRig);
 	}
 
-	initModel(scene) {
-		const character = this.translateRef = new THREE.Object3D();
+	initMesh() {
+		const character = this.meshRef = this.translateRef = new THREE.Object3D();
 		// Torso
 		const torsoHeight = 1.65;
 		const geometry = new THREE.CylinderGeometry( 0.09, 0.36, torsoHeight, 16 ); 
@@ -65,7 +61,7 @@ export default class Player extends EntityPhysical {
 		// Head
 		const headMaterialPlain = new THREE.MeshStandardMaterial({ color: 0xdddddd });
 		const headMaterialDark = new THREE.MeshStandardMaterial({ color: 0xbbbbbb });
-    const headMaterialTexture = new THREE.MeshStandardMaterial({ map: scene.textures.admixon });
+    const headMaterialTexture = new THREE.MeshStandardMaterial({ map: this.scene.textures.admixon });
 		const headMaterials = [
 			headMaterialPlain, // right
 			headMaterialPlain, // left
@@ -82,7 +78,7 @@ export default class Player extends EntityPhysical {
 		// headPivot.position.y =  0.9 * torsoHeight;
 		headPivot.add(headMesh);
 		character.add(headPivot);
-		return character;
+		this.scene.add(character)
 	}
 
 }

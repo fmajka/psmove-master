@@ -7,6 +7,7 @@ import EngineBase from "./EngineBase.js";
 import DefaultScene from "./DefaultScene.js";
 import UIWindow from './UIWindow.js';
 import IOClient from './IOClient.js';
+import EntityProjectile from './entities/EntityProjectile.js';
 
 export default class EngineClient extends EngineBase {
 	/** @type {THREE.Camera} */
@@ -80,6 +81,46 @@ export default class EngineClient extends EngineBase {
 		return this.renderer.xr.getCamera(this.camera);
 	}
 
+	/**
+	 * 
+	 * @param {THREE.Mesh} groundMesh 
+	 * @param {number} x 
+	 * @param {number} z 
+	 * @param {number} hex 
+	 */
+	static colorVertexAtWorldXZ(groundMesh, x, z, hex) {
+		const color = new THREE.Color().setHex(hex);
+		const width = 64;
+		const height = 64;
+		const segmentsX = 128;
+		const segmentsZ = 128;
+
+		const vertexCountX = segmentsX + 1; // 129
+
+		// Convert world (x, z) to local plane space
+		const localPos = groundMesh.worldToLocal(new THREE.Vector3(x, 0, z));
+
+		// Map to [0, width] and [0, height] then to grid index
+		const u = (localPos.x + width / 2) / width;
+		const v = (-localPos.y + height / 2) / height;
+
+		// Clamp to [0, 1]
+		const clampedU = THREE.MathUtils.clamp(u, 0, 1);
+		const clampedV = THREE.MathUtils.clamp(v, 0, 1);
+
+		// Get nearest vertex grid coordinates
+		const ix = Math.round(clampedU * segmentsX);
+		const iz = Math.round(clampedV * segmentsZ);
+
+		const index = iz * vertexCountX + ix;
+
+		// Apply color
+		const colorAttr = groundMesh.geometry.getAttribute("color");
+		console.log(groundMesh.geometry, colorAttr)
+		colorAttr.setXYZ(index, color.r, color.g, color.b);
+		colorAttr.needsUpdate = true;
+	}
+
 	// Syncs with server data
 	static sync(data) {
 		// Loop through entity data
@@ -89,27 +130,37 @@ export default class EngineClient extends EngineBase {
 			if(!entity) {
 				const type = EntityTypes[entityProps._t];
 				entity = this.getEntity(id, type, this.scene);
-				console.log(this.entities)
+				// console.log(this.entities)
 			}
 			delete entityProps._t;
 			// Sync props
 			for(const [key, value] of Object.entries(entityProps)) {
 				entity.syncProp(key, value);
 			}
+			// Remove dead entity
+			if(entityProps.life <= 0.0) {
+				// Spray vertex
+				if(entity instanceof EntityProjectile) {
+					const {x, z} = entity.position;
+					this.colorVertexAtWorldXZ(this.scene.groundMesh, x, z, entity.colorValue);
+				}
+				this.entities.delete(id);
+				// console.log("Removed entity", entity.constructor.name, "with id", id, this.entities);
+			}
 		} 
 	}
 
 	static init() {
-		this.scene = new DefaultScene();
-		// Default perspective camera
-		this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 1000);
-		this.camera.position.set(0, 15, 2);
-		this.scene.add(this.camera);
-
 		// Rendering
 		this.renderer = new THREE.WebGLRenderer();
 		this.renderer.setSize(window.innerWidth, window.innerHeight);
 		document.body.appendChild(this.renderer.domElement);
+
+		this.scene = new DefaultScene(this.renderer);
+		// Default perspective camera
+		this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 1000);
+		this.camera.position.set(0, 15, 2);
+		this.scene.add(this.camera);
 
 		// XR
 		this.renderer.xr.enabled = true;
@@ -182,11 +233,14 @@ export default class EngineClient extends EngineBase {
 	// TODO: maybe it should be moved somewhere else
 	static getDebugText() {
 		const controller = this.localController ?? this.entities.get("0");
+		// const controller = this.localController ?? null;
 		const player = this.localPlayer;
 		const yawFromQuat = (quat) => new THREE.Euler().setFromQuaternion(quat, "YXZ").y;
+		const {x, y, z} = controller?.position || {};
 		return [
-			controller && ["MovePos", controller.x, controller.y, controller.z],
-			controller && ["MoveQuat", ...controller.quaternion],
+			controller && ["MovePos", x, y, z],
+			// controller && ["MoveQuat", ...controller.quaternion],
+			controller && ["MoveYaw", yawFromQuat(controller.quaternion) * 180 / Math.PI],
 			controller && player && {
 				Scale: controller.physicalScale.toFixed(2),
 				Calib: player.calibrationMode,

@@ -1,8 +1,13 @@
 import * as THREE from 'three';
+import { FBXLoader } from 'three/examples/jsm/Addons.js';
 
 export default class DefaultScene extends THREE.Scene {
-	constructor() {
+	constructor(renderer) {
 		super();
+
+		this.renderer = renderer;
+
+		this.fbxLoader = new FBXLoader();
 		
 		this.textureLoader = new THREE.TextureLoader();
 		// Object for storing texture references
@@ -14,13 +19,21 @@ export default class DefaultScene extends THREE.Scene {
 		// Just a torus
 		this.torus = null;
 
+		this.sun = null;
+
+		/** @type {THREE.Mesh} */
+		this.groundMesh = null;
+
+		// Time for day/night cycle
+		this.time = 0;
+
 		// Texture map for easy creation
 		const textureMap = {
-			admixon: "/admixon_face.jpg"
+			admixon: "/admixon_face.jpg",
 		}
 		// Fairy textures
 		for(let i = 1; i <= 4; i++) {
-			textureMap[`fairy${i}`] = `/fairy${i}.png`
+			textureMap[`fairy${i}`] = `/fairy${i}.png`;
 		}
 
 		this.initTextures(textureMap);
@@ -29,9 +42,12 @@ export default class DefaultScene extends THREE.Scene {
 
 	initTextures(textureMap) {
 		for(const [name, path] of Object.entries(textureMap)) {
-			this.textures[name] = this.textureLoader.load(path, () => console.log('Texture loaded successfully'),
-  undefined,
-  (err) => console.error('Error loading texture:', err));
+			this.textures[name] = this.textureLoader.load(
+				path, 
+				() => console.log(`Texture "${name}" from "${path}" loaded successfully`),
+  			undefined,
+  			(err) => console.warn(`Error loading texture from "${path}":`, err)
+			);
 		}
 	}
 
@@ -54,12 +70,13 @@ export default class DefaultScene extends THREE.Scene {
 		this.add(this.torus);
 
 		// Light
-		const pointLight = new THREE.PointLight(0x00ff00, 5);
-		pointLight.position.set(7, 7, 7);
+		// const pointLight = new THREE.PointLight(0x00ff00, 5);
+		// pointLight.position.set(7, 7, 7);
 		const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
-		const sun = new THREE.PointLight(0xffffaa, 5, 0, 0);
-		sun.position.set(100, 100, 100);
-		this.add(pointLight, ambientLight, sun);
+		this.sun = new THREE.PointLight(0xffffaa, 10, 0, 0.1);
+		this.sun.position.set(100, 100, 100);
+		this.add(this.sun);
+		this.add(ambientLight);
 
 		// Stars
 		const createStar = () => {
@@ -79,13 +96,14 @@ export default class DefaultScene extends THREE.Scene {
 		// Skybox
 		const skyboxMaterials = ["px", "nx", "py", "ny", "pz", "nz"].map((name) => {
 			texture = this.textureLoader.load(`/textures/sky_18_cubemap/${name}.png`);
-			material = new THREE.MeshBasicMaterial({ map: texture });
-			material.side = THREE.BackSide;
-			return material;
+			return new THREE.MeshBasicMaterial({ 
+				map: texture,
+				side: THREE.BackSide
+			});
 		});
 		const skyboxGeometry = new THREE.BoxGeometry(1000, 1000, 1000);
-		const skybox = new THREE.Mesh(skyboxGeometry, skyboxMaterials);
-		this.add(skybox);
+		this.skybox = new THREE.Mesh(skyboxGeometry, skyboxMaterials);
+		this.add(this.skybox);
 		
 		// Ground
 		const groundGeometry = new THREE.PlaneGeometry(64, 64, 128, 128);
@@ -94,12 +112,22 @@ export default class DefaultScene extends THREE.Scene {
 		groundTexture.repeat.set(16, 16);
 		const dispMap = this.textureLoader.load("/heightmap.png");
 		dispMap.wrapS = dispMap.wrapT = THREE.RepeatWrapping;
+		// Initialize vertex colors to white
+		// const vertexCount = geometry.attributes.position.count;
+		const vertexCount = groundGeometry.getAttribute("position").count;
+		const colors = new Float32Array(vertexCount * 3);
+		colors.fill(1); // RGB all white
+		groundGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+		console.log("Geometry", groundGeometry)
+		// Ground Material
 		const groundMaterial = new THREE.MeshStandardMaterial({
+			vertexColors: true,
+			side: THREE.DoubleSide,
 			map: groundTexture,
 			displacementMap: dispMap,
 			displacementScale: 16,
 		});
-		const groundMesh = new THREE.Mesh(groundGeometry, groundMaterial);
+		const groundMesh = this.groundMesh = new THREE.Mesh(groundGeometry, groundMaterial);
 		// groundMesh.rotation.z = Math.PI;
 		groundMesh.rotation.x = -Math.PI / 2;
 		groundMesh.position.y = 0;
@@ -108,8 +136,12 @@ export default class DefaultScene extends THREE.Scene {
 	}
 
 	update(dt) {
+		this.time += dt;
+
 		this.torus.rotation.x += 0.6 * dt;
 		this.torus.rotation.y += 0.3 * dt;
 		this.torus.rotation.z += 0.6 * dt;
+
+		this.skybox.rotation.y += 0.003 * dt;
 	}
 }

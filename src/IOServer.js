@@ -64,6 +64,21 @@ export default class IOServer {
 						EngineServer.setPlayerController(addr, data?.id)
 					}
 
+					else if(data.type === "test_yaw") {
+						const player = EngineServer.getEntity(addr);
+						if(!player) { console.error("test_yaw: player is", player); return; }
+						const controller = EngineServer.getPlayerController(player);
+						if(!controller) { console.error("test_yaw: controller is", controller); return; }
+						//
+						const yawFromQuat = (quat) => new THREE.Euler().setFromQuaternion(quat, "YXZ").y * 180 / Math.PI;
+						const startYaw = yawFromQuat(controller.quaternion).toFixed(2);
+						setTimeout(() => {
+							const yaw = yawFromQuat(controller.quaternion).toFixed(2);
+							console.log(`testYaw for ${data.seconds}s: from ${startYaw} to ${yaw}, diff=${(yaw - startYaw).toFixed(2)} (deg)`);
+						}, data.seconds * 1000);
+						console.log("testing yaw for", data.seconds, "seconds");
+					}
+
 				} catch(err) {
 					console.log("IOServer onmessage error:", err.message);
 				}

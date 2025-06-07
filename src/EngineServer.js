@@ -6,16 +6,20 @@ import Player from './entities/EntityPlayer.js';
 import EntityProjectile from './entities/EntityProjectile.js';
 import EntityParticle from './entities/EntityParticle.js';
 import EntityEnemy from './entities/EntityEnemy.js';
-import Entity from './entities/Entity.js';
+import PSMove from './enums/PSMove.js';
 
 export default class EngineServer extends EngineBase {
 	/**
 	 * Stores all existing controller references
-	 * @type {Set<Controller}
+	 * @type {Set<Controller>}
 	 */
 	static controllerCache = new Set();
 
-	static nextId = 8;
+	/**
+	 * The next free entity ID
+	 * @type {number}
+	 */
+	static nextId = PSMove.MAX_CONTROLLER_COUNT;
 
 	/**
 	 * Syncs the player's local rotation
@@ -72,9 +76,17 @@ export default class EngineServer extends EngineBase {
 		}
 		// Assign player to controller
 		controller.playerId = playerId;
+		IOServer.addSync(controller.id, "playerId");
 		console.log("EngineServer.setPlayerController: assigned player", playerId, "to controller", controllerId);
 		// Send updated controller list to clients
 		this.refreshControllerList();
+	}
+
+	static getPlayerController(player) {
+		for(const controller of this.controllerCache) {
+			if(controller.playerId === player.id) { return controller; }
+		}
+		return null;
 	}
 
 	/**
@@ -85,15 +97,6 @@ export default class EngineServer extends EngineBase {
 	static getControllerAssignedPlayer(controller) {
 		if(!controller.playerId) { return null; }
 		return this.getEntity(controller.playerId);
-	}
-
-	// TODO: it's only temporary
-	static getFirstVRPlayer() {
-		// TODO: a set of connected player ids
-		for(const player of this.entities.values()) {
-			if(player.vr) { return player; }
-		}
-		return null;
 	}
 
 	static controllerShootProjectile(controller) {
@@ -113,11 +116,9 @@ export default class EngineServer extends EngineBase {
 	static spawnParticles(position, colorValue) {
 		const {x, y, z} = position;
 		console.log(`Spawning particles at (${x}, ${y}, ${z})`);
+
 		const count = 10 + Math.floor(Math.random() * 5);
 		for (let i = 0; i < count; i++) {
-			// const geo = new THREE.SphereGeometry(0.05, 4, 4);
-			// const mat = new THREE.MeshStandardMaterial({ color: 0xffff00, transparent: true });
-			// const p = new THREE.Mesh(geo, mat);
 			const particle = this.getEntity(this.nextId++, EntityParticle);
 			particle.position.copy(position);
 			particle.direction.set( 
@@ -125,12 +126,12 @@ export default class EngineServer extends EngineBase {
 				(Math.random() - 0.5) * 2,
 				(Math.random() - 0.5) * 2
 			).normalize();
+
+			// Tint particles if argument provided
 			if(colorValue) {
 				particle.colorValue = colorValue;
 				IOServer.addSync(particle.id, "colorValue")
 			}
-			
-			// scene.add(p);
 		}
 	}
 
@@ -149,41 +150,41 @@ export default class EngineServer extends EngineBase {
 	// TODO: make it more... acceptable?
 	static update(dt) {
 		for(const [id, entity] of this.entities.entries()) {
-			if(!entity.life || entity.life <= 0) { continue; }
-			// Projectile update
+			// Remove dead
+			if(entity.life <= 0) {
+				this.entities.delete(id);
+				continue; 
+			}
+
 			if(entity instanceof EntityProjectile) {
 				entity.life -= dt;
 				entity.position.add(entity.direction.clone().multiplyScalar(entity.speed * dt));
+				
+				// Explode when expired or hit the ground
+				if(entity.life <= 0 || this.getWorldHeight(entity.position.x, entity.position.z) > entity.position.y - 0.05) {
+					entity.life = 0;
+					this.spawnParticles(entity.position, entity.colorValue);
+				}
+
 				IOServer.addSync(id, "position", "life");
-				// entity.position.add(p.velocity.clone().multiplyScalar(delta));
 
 				// Collision with enemies
 				for(const [enemyId, enemy] of this.entities.entries()) {
 					if(!(enemy instanceof EntityEnemy) || enemy.life <= 0) { continue; }
-					if (entity.position.distanceTo(enemy.position) < 0.75) {
-						// TODO: kill the bastard
-						enemy.life = 0;
+					if(entity.position.distanceTo(enemy.position) < 0.55) {
+						entity.life = enemy.life = 0;
+						IOServer.addSync(id, "life");
 						IOServer.addSync(enemyId, "life");
-						// scene.remove(e);
-						// scene.remove(p.mesh);
-						this.spawnParticles(enemy.position);
-						// enemies.splice(j, 1);
-						// projectiles.splice(i, 1);
+						this.spawnParticles(entity.position, entity.colorValue);
 						break;
 					}
 				}
 			}
 
 			else if(entity instanceof EntityParticle) {
+				entity.life -= dt;
         entity.position.add(entity.direction.clone().multiplyScalar(entity.speed * dt));
-        entity.life -= dt;
 				IOServer.addSync(id, "position", "life");
-        // p.mesh.material.opacity = p.life;
-        if (entity.life <= 0) {
-					// TODO: kill ze bastard
-          // scene.remove(p.mesh);
-          // particles.splice(i, 1);
-        }
 			}
 		}
 	}
