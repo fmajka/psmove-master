@@ -311,10 +311,14 @@ async function startServer() {
       if(controller.positionHistory.length > 10) { controller.positionHistory.shift(); }
       controller.updatePosition(player?.position);
       // Update quaternion buffer
+      controller.quaternionHistory.push(controller.quaternion.clone());
+      if(controller.quaternionHistory.length > 10) { controller.quaternionHistory.shift(); }
       controller.physicalQuaternion.set(msg.qx, msg.qy, msg.qz, msg.qw);
       controller.updateQuaternion();
+      // Button updates
       controller.buttons = msg.buttons;
       controller.changed = changed;
+      controller.trigger = msg.trigger / 255;
       // TODO: proper color handling
       controller.colorValue = msg.colorValue;
       // if(doPrint) { console.log(controller.color) }
@@ -323,7 +327,7 @@ async function startServer() {
       for(const buttonValue of Object.values(PSMove)) {
         btnTime[buttonValue] = (controller.buttons & buttonValue) ? (btnTime[buttonValue] ?? 0) + dt : 0;
       }
-      IOServer.addSync(controller.id, "position", "quaternion", "buttons", "changed", "colorValue");
+      IOServer.addSync(controller.id, "position", "quaternion", "buttons", "changed", "trigger", "colorValue");
       processButtons(controller);
       // Print once a second debug
       if(doPrint) { doPrint = false; setTimeout(() => doPrint = true, 1000); }

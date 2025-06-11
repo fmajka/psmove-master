@@ -116,7 +116,7 @@ export default class EngineClient extends EngineBase {
 
 		// Apply color
 		const colorAttr = groundMesh.geometry.getAttribute("color");
-		console.log(groundMesh.geometry, colorAttr)
+		// console.log(groundMesh.geometry, colorAttr)
 		colorAttr.setXYZ(index, color.r, color.g, color.b);
 		colorAttr.needsUpdate = true;
 	}

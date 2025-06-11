@@ -30,6 +30,10 @@ export default class DefaultScene extends THREE.Scene {
 		// Texture map for easy creation
 		const textureMap = {
 			admixon: "/admixon_face.jpg",
+			psCross: "/ps-cross.png",
+			psSquare: "/ps-square.png",
+			psTriangle: "/ps-triangle.png",
+			psCircle: "/ps-circle.png",
 		}
 		// Fairy textures
 		for(let i = 1; i <= 4; i++) {
@@ -142,6 +146,6 @@ export default class DefaultScene extends THREE.Scene {
 		this.torus.rotation.y += 0.3 * dt;
 		this.torus.rotation.z += 0.6 * dt;
 
-		this.skybox.rotation.y += 0.003 * dt;
+		this.skybox.rotation.y += 0.005 * dt;
 	}
 }

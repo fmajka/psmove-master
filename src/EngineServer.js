@@ -109,11 +109,13 @@ export default class EngineServer extends EngineBase {
 			.normalize();
 		projectile.colorValue = controller.colorValue;
 
+		// this.spawnParticles(controller.position, controller.colorValue, 0.01, 0.5);
+
 		IOServer.addSync(projectile.id, "colorValue")
 		console.log("Controller", controller.id, "shoot!");
 	}
 
-	static spawnParticles(position, colorValue) {
+	static spawnParticles(position, colorValue, radius, speed) {
 		const {x, y, z} = position;
 		console.log(`Spawning particles at (${x}, ${y}, ${z})`);
 
@@ -126,12 +128,15 @@ export default class EngineServer extends EngineBase {
 				(Math.random() - 0.5) * 2,
 				(Math.random() - 0.5) * 2
 			).normalize();
-
+			// Custom size
+			particle.radius = radius ?? 0.02;
+			particle.speed = speed ?? 1.0;
 			// Tint particles if argument provided
 			if(colorValue) {
 				particle.colorValue = colorValue;
 				IOServer.addSync(particle.id, "colorValue")
 			}
+			IOServer.addSync(particle.id, "radius")
 		}
 	}
 
